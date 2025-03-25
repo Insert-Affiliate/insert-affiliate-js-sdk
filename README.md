@@ -1,0 +1,1 @@
+# insert-affiliate-js-sdk
