@@ -82,8 +82,8 @@ export class InsertAffiliate {
   }
 
   static async returnUserAccountTokenAndStoreExpectedTransaction(): Promise<string | null> {
-    const identifier = await this.returnInsertAffiliateIdentifier();
-    if (!identifier) return null;
+    const shortCode = await this.returnInsertAffiliateIdentifier();
+    if (!shortCode) return null;
 
     let token = await getValue('userAccountToken');
     if (!token) {
