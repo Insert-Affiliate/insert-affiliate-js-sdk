@@ -64,16 +64,26 @@ export class InsertAffiliate {
 
   static async trackEvent(eventName: string): Promise<void> {
     const id = await this.returnInsertAffiliateIdentifier();
+
     if (!id) {
       console.warn('[Insert Affiliate] No affiliate identifier found.');
       return;
     }
 
+    const companyCode = this.companyCode || await getValue('companyCode');
+
+    if (!companyCode) return;
+
     try {
       await fetch('https://api.insertaffiliate.com/v1/trackEvent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventName, deepLinkParam: id }),
+        body: JSON.stringify(
+          {
+            eventName,
+            deepLinkParam: id,
+            companyId: companyCode,
+          }),
       });
       console.log('[Insert Affiliate] Event tracked:', eventName);
     } catch (err) {
