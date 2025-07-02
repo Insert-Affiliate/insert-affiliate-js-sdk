@@ -43,7 +43,7 @@ export class InsertAffiliate {
 
   static async setInsertAffiliateIdentifier(referringLink: string): Promise<string | null> {
     const userId = await this.getOrCreateUserID();
-    const shortCode = /^[a-zA-Z0-9]{10}$/.test(referringLink)
+    const shortCode = /^[a-zA-Z0-9]{3,25}$/.test(referringLink)
       ? referringLink
       : await this.fetchShortLink(referringLink);
 
@@ -54,7 +54,7 @@ export class InsertAffiliate {
   }
 
   static async setShortCode(shortCode: string): Promise<void> {
-    const valid = /^[a-zA-Z0-9]{10}$/.test(shortCode);
+    const valid = /^[a-zA-Z0-9]{3,25}$/.test(shortCode);
     if (!valid) {
       console.warn('[Insert Affiliate] Invalid short code.');
       return;
