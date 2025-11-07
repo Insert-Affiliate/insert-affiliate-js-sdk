@@ -53,8 +53,9 @@ await InsertAffiliate.initialize("your_company_code");
 - Replace `{{ your_company_code }}` with the unique company code associated with your Insert Affiliate account. You can find this code in your dashboard under [Settings](http://app.insertaffiliate.com/settings).
 
 ## In-App Purchase Setup [Required]
-Insert Affiliate requires a Receipt Verification platform to validate in-app purchases. You must choose **one** of our supported partners:
+Insert Affiliate requires a Receipt Verification platform to validate in-app purchases. You must choose **one** of our supported options:
 - [RevenueCat](https://www.revenuecat.com/)
+- [Stripe](https://stripe.com/)
 
 ### Option 1: RevenueCat Integration
 
@@ -99,6 +100,73 @@ Next, you must setup a webhook to allow us to communicate directly with RevenueC
    - Locate the `RevenueCat Webhook Authentication Header` value
    - Copy this value
    - Paste it as the Authorization header value in your RevenueCat webhook configuration
+
+### Option 2: Stripe Integration
+
+For web-based subscriptions and payments using Stripe, you'll need to pass the Insert Affiliate identifier to Stripe's metadata during checkout.
+
+#### Code Setup
+
+1. **Retrieve the Affiliate Identifier**
+
+Before creating a Stripe checkout session, retrieve the current affiliate identifier from the Insert Affiliate SDK:
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+const affiliateId = await InsertAffiliate.returnInsertAffiliateIdentifier();
+```
+
+2. **Pass to Your Backend**
+
+When calling your backend to create a Stripe checkout session, include the affiliate identifier:
+
+```javascript
+const response = await fetch('https://your-backend.com/create-checkout-session', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    priceId: 'price_xxxxx',
+    insertAffiliate: affiliateId,
+    successUrl: window.location.origin + '/success',
+    cancelUrl: window.location.origin + '/canceled',
+  }),
+});
+```
+
+3. **Store in Stripe Metadata (Backend)**
+
+In your backend, when creating the Stripe checkout session, store the affiliate identifier in both the session metadata and subscription metadata:
+
+```javascript
+const stripe = require('stripe')('sk_test_xxxxx');
+
+app.post('/create-checkout-session', async (req, res) => {
+  const { priceId, insertAffiliate, successUrl, cancelUrl } = req.body;
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    line_items: [{
+      price: priceId,
+      quantity: 1,
+    }],
+    metadata: {
+      insertAffiliate: insertAffiliate || '',
+    },
+    subscription_data: {
+      metadata: {
+        insertAffiliate: insertAffiliate || '',
+      },
+    },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+
+  res.json({ sessionId: session.id });
+});
+```
 
 
 ## Deep Link Setup [Required]
