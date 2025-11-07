@@ -52,6 +52,47 @@ await InsertAffiliate.initialize("your_company_code");
 ```
 - Replace `{{ your_company_code }}` with the unique company code associated with your Insert Affiliate account. You can find this code in your dashboard under [Settings](http://app.insertaffiliate.com/settings).
 
+### Verbose Logging (Optional)
+
+By default, the SDK operates with minimal logging to avoid cluttering the console. However, you can enable verbose logging to see detailed information about SDK operations. This is particularly useful for debugging during development or testing.
+
+#### Enable Verbose Logging
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Enable verbose logging (second parameter)
+await InsertAffiliate.initialize("your_company_code", true);
+```
+
+**When verbose logging is enabled, you'll see detailed logs with the `[Insert Affiliate] [VERBOSE]` prefix that show:**
+
+- **Initialization Process**: SDK startup, company code validation, storage operations
+- **Data Management**: User ID generation, referrer link storage, company code state management
+- **Deep Link Processing**: Input validation, short code detection, API conversion process
+- **API Communication**: Request/response details for all server calls
+- **Event Tracking**: Event parameters, payload construction, success/failure status
+- **Purchase Operations**: Transaction storage, token validation, webhook processing
+
+**Example verbose output:**
+```
+[Insert Affiliate] [VERBOSE] Starting SDK initialization...
+[Insert Affiliate] [VERBOSE] Company code provided: Yes
+[Insert Affiliate] [VERBOSE] Verbose logging enabled
+[Insert Affiliate] SDK initialized with company code: your-company-code
+[Insert Affiliate] [VERBOSE] Company code saved to storage
+[Insert Affiliate] [VERBOSE] SDK marked as initialized
+```
+
+**Benefits of verbose logging:**
+- **Debug Deep Linking Issues**: See exactly what links are being processed and how they're converted
+- **Monitor API Communication**: Track all server requests, responses, and error details
+- **Identify Storage Problems**: Understand storage read/write operations and state management
+- **Performance Insights**: Monitor async operation timing and identify bottlenecks
+- **Integration Troubleshooting**: Quickly identify configuration or setup issues
+
+⚠️ **Important**: Disable verbose logging in production builds to avoid exposing sensitive debugging information and to optimize performance.
+
 ## In-App Purchase Setup [Required]
 Insert Affiliate requires a Receipt Verification platform to validate in-app purchases. You must choose **one** of our supported options:
 - [RevenueCat](https://www.revenuecat.com/)

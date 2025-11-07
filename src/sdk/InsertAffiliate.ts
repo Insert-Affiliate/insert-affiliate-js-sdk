@@ -22,95 +22,174 @@ interface ExpectedTransactionPayload {
 export class InsertAffiliate {
   private static isInitialized: boolean = false;
   private static companyCode: string | null = null;
+  private static verboseLogging: boolean = false;
 
-  static async initialize(code: string | null): Promise<void> {
+  private static verboseLog(message: string): void {
+    if (this.verboseLogging) {
+      console.log(`[Insert Affiliate] [VERBOSE] ${message}`);
+    }
+  }
+
+  static async initialize(code: string | null, verboseLogging: boolean = false): Promise<void> {
+    this.verboseLogging = verboseLogging;
+
+    if (verboseLogging) {
+      this.verboseLog('Starting SDK initialization...');
+      this.verboseLog(`Company code provided: ${code ? 'Yes' : 'No'}`);
+      this.verboseLog('Verbose logging enabled');
+    }
+
     if (this.isInitialized) {
-      console.warn('[Insert Affiliate] SDK already initialized.');
+      this.verboseLog('SDK already initialized, skipping');
       return;
     }
     this.companyCode = code;
     await saveValue('companyCode', code || '');
     this.isInitialized = true;
-    console.log(`[Insert Affiliate] SDK initialized ${code ? `with company code: ${code}` : 'without a company code.'}`);
+    this.verboseLog(`SDK initialized ${code ? `with company code: ${code}` : 'without a company code.'}`);
+    this.verboseLog('Company code saved to storage');
+    this.verboseLog('SDK marked as initialized');
   }
 
   static async returnInsertAffiliateIdentifier(): Promise<string | null> {
+    this.verboseLog('Getting insert affiliate identifier...');
     const userId = await this.getOrCreateUserID();
     const referrerLink = await getValue('referrerLink');
-    if (!referrerLink) return null;
-    return `${referrerLink}-${userId}`;
+    this.verboseLog(`User ID: ${userId || 'empty'}, Referrer link: ${referrerLink || 'empty'}`);
+
+    if (!referrerLink) {
+      this.verboseLog('No referrer link found, returning null');
+      return null;
+    }
+
+    const identifier = `${referrerLink}-${userId}`;
+    this.verboseLog(`Returning affiliate identifier: ${identifier}`);
+    return identifier;
   }
 
   static async setInsertAffiliateIdentifier(referringLink: string): Promise<string | null> {
+    this.verboseLog(`Setting affiliate identifier. Input referringLink: ${referringLink}`);
+
     const userId = await this.getOrCreateUserID();
-    const shortCode = /^[a-zA-Z0-9]{3,25}$/.test(referringLink)
+    this.verboseLog(`User ID: ${userId}`);
+
+    // Check if it's already a short code
+    const isShortCode = /^[a-zA-Z0-9]{3,25}$/.test(referringLink);
+    this.verboseLog(`Is short code: ${isShortCode}`);
+
+    const shortCode = isShortCode
       ? referringLink
       : await this.fetchShortLink(referringLink);
 
-    if (!shortCode) return null;
+    if (!shortCode) {
+      this.verboseLog('No short code found or generated, returning null');
+      return null;
+    }
 
+    this.verboseLog(`Saving short code to storage: ${shortCode}`);
     await saveValue('referrerLink', shortCode);
-    return `${shortCode}-${userId}`;
+    this.verboseLog('Short code saved successfully');
+
+    const identifier = `${shortCode}-${userId}`;
+    this.verboseLog(`Returning identifier: ${identifier}`);
+    return identifier;
   }
 
   static async setShortCode(shortCode: string): Promise<void> {
+    this.verboseLog(`Setting short code. Input: ${shortCode}`);
+
     const valid = /^[a-zA-Z0-9]{3,25}$/.test(shortCode);
+    this.verboseLog(`Short code validation: ${valid ? 'Valid' : 'Invalid'}`);
+
     if (!valid) {
-      console.warn('[Insert Affiliate] Invalid short code.');
+      this.verboseLog('Invalid short code, aborting');
       return;
     }
+
+    this.verboseLog('Calling setInsertAffiliateIdentifier with short code');
     await this.setInsertAffiliateIdentifier(shortCode);
   }
 
   static async trackEvent(eventName: string): Promise<void> {
+    this.verboseLog(`Tracking event: ${eventName}`);
+
     const id = await this.returnInsertAffiliateIdentifier();
 
     if (!id) {
-      console.warn('[Insert Affiliate] No affiliate identifier found.');
+      this.verboseLog('Cannot track event: no affiliate identifier available');
       return;
     }
 
     const companyCode = this.companyCode || await getValue('companyCode');
+    this.verboseLog(`Company code: ${companyCode || 'empty'}`);
 
-    if (!companyCode) return;
+    if (!companyCode) {
+      this.verboseLog('Cannot track event: no company code available');
+      return;
+    }
+
+    const payload = {
+      eventName,
+      deepLinkParam: id,
+      companyId: companyCode,
+    };
+
+    this.verboseLog(`Track event payload: ${JSON.stringify(payload)}`);
+    this.verboseLog('Making API call to track event...');
 
     try {
-      await fetch('https://api.insertaffiliate.com/v1/trackEvent', {
+      const response = await fetch('https://api.insertaffiliate.com/v1/trackEvent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          {
-            eventName,
-            deepLinkParam: id,
-            companyId: companyCode,
-          }),
+        body: JSON.stringify(payload),
       });
-      console.log('[Insert Affiliate] Event tracked:', eventName);
+
+      this.verboseLog(`Track event API response status: ${response.status}`);
+
+      if (response.ok) {
+        this.verboseLog(`Event tracked successfully: ${eventName}`);
+      } else {
+        this.verboseLog(`Failed to track event with status code: ${response.status}`);
+      }
     } catch (err) {
-      console.error('[Insert Affiliate] Failed to track event:', err);
+      this.verboseLog(`Network error tracking event: ${err}`);
     }
   }
 
   static async returnUserAccountTokenAndStoreExpectedTransaction(): Promise<string | null> {
-    const shortCode = await this.returnInsertAffiliateIdentifier();
-    if (!shortCode) return null;
+    this.verboseLog('Getting user account token and storing expected transaction...');
 
-    let token = await getValue('userAccountToken');
-    if (!token) {
-      token = generateUUID();
-      await saveValue('userAccountToken', token);
+    const shortCode = await this.returnInsertAffiliateIdentifier();
+    if (!shortCode) {
+      this.verboseLog('No affiliate identifier found, not saving expected transaction');
+      return null;
     }
 
+    let token = await getValue('userAccountToken');
+    this.verboseLog(`Existing token: ${token || 'none'}`);
+
+    if (!token) {
+      this.verboseLog('Generating new user account token...');
+      token = generateUUID();
+      await saveValue('userAccountToken', token);
+      this.verboseLog(`Generated and saved new token: ${token}`);
+    }
+
+    this.verboseLog(`User account token: ${token}`);
     await this.storeExpectedStoreTransaction(token);
     return token;
   }
 
   static async storeExpectedStoreTransaction(userAccountToken: string): Promise<void> {
+    this.verboseLog(`Storing expected store transaction with token: ${userAccountToken}`);
+
     const companyCode = this.companyCode || await getValue('companyCode');
     const shortCode = await this.returnInsertAffiliateIdentifier();
 
+    this.verboseLog(`Company code: ${companyCode || 'empty'}, Short code: ${shortCode || 'empty'}`);
+
     if (!companyCode || !shortCode) {
-      console.error('[Insert Affiliate] Missing company code or identifier.');
+      this.verboseLog('Cannot store transaction: missing company code or identifier');
       return;
     }
 
@@ -121,6 +200,9 @@ export class InsertAffiliate {
       storedDate: new Date().toISOString(),
     };
 
+    this.verboseLog(`Payload: ${JSON.stringify(payload)}`);
+    this.verboseLog('Making API call to store expected transaction...');
+
     try {
       const res = await fetch('https://api.insertaffiliate.com/v1/api/app-store-webhook/create-expected-transaction', {
         method: 'POST',
@@ -128,13 +210,15 @@ export class InsertAffiliate {
         body: JSON.stringify(payload),
       });
 
+      this.verboseLog(`API response status: ${res.status}`);
+
       if (res.status === 200) {
-        console.log('[Insert Affiliate] Stored expected transaction');
+        this.verboseLog('Expected transaction stored successfully on server');
       } else {
-        console.warn('[Insert Affiliate] Failed storing transaction:', res.status);
+        this.verboseLog(`Failed to store transaction with status: ${res.status}`);
       }
     } catch (error) {
-      console.error('[Insert Affiliate] Error storing transaction:', error);
+      this.verboseLog(`Network error storing transaction: ${error}`);
     }
   }
 
@@ -145,7 +229,9 @@ export class InsertAffiliate {
     iapticPublicKey: string
   ): Promise<boolean> {
     try {
+      this.verboseLog('Starting Iaptic purchase validation...');
       const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+      this.verboseLog(`Platform detected: ${isIOS ? 'iOS' : 'Android'}`);
 
       const baseRequest = {
         id: iapticAppId,
@@ -155,12 +241,14 @@ export class InsertAffiliate {
       let transaction: any;
 
       if (isIOS) {
+        this.verboseLog('Creating iOS transaction payload');
         transaction = {
           id: iapticAppId,
           type: 'ios-appstore',
           appStoreReceipt: jsonIapPurchase.transactionReceipt,
         };
       } else {
+        this.verboseLog('Creating Android transaction payload');
         const receiptJson: IapticAndroidReceipt = JSON.parse(atob(jsonIapPurchase.transactionReceipt));
         transaction = {
           id: receiptJson.orderId,
@@ -172,6 +260,7 @@ export class InsertAffiliate {
       }
 
       const insertAffiliateIdentifier = await this.returnInsertAffiliateIdentifier();
+      this.verboseLog(`Affiliate identifier: ${insertAffiliateIdentifier || 'none'}`);
 
       const payload = {
         ...baseRequest,
@@ -181,6 +270,7 @@ export class InsertAffiliate {
           : undefined,
       };
 
+      this.verboseLog('Making API call to Iaptic validator...');
       const response = await fetch('https://validator.iaptic.com/v1/validate', {
         method: 'POST',
         headers: {
@@ -190,19 +280,33 @@ export class InsertAffiliate {
         body: JSON.stringify(payload),
       });
 
-      return response.status === 200;
+      this.verboseLog(`Iaptic validation response status: ${response.status}`);
+
+      if (response.status === 200) {
+        this.verboseLog('Purchase validated successfully');
+        return true;
+      } else {
+        this.verboseLog(`Validation failed with status: ${response.status}`);
+        return false;
+      }
     } catch (error) {
-      console.error('[Insert Affiliate] Purchase validation failed:', error);
+      this.verboseLog(`Error during purchase validation: ${error}`);
       return false;
     }
   }
 
   static async fetchAndConditionallyOpenUrl(affiliateLink: string, offerCodeUrlId: string): Promise<void> {
+    this.verboseLog('Fetching offer code and opening URL...');
     const encoded = encodeURIComponent(affiliateLink);
+    this.verboseLog(`Encoded affiliate link: ${encoded}`);
 
     try {
+      this.verboseLog('Making API call to fetch offer code...');
       const res = await fetch(`https://api.insertaffiliate.com/v1/affiliateReturnOfferCode/${encoded}`);
+      this.verboseLog(`API response status: ${res.status}`);
+
       const offerCode = (await res.text()).replace(/[^a-zA-Z0-9]/g, '');
+      this.verboseLog(`Received offer code: ${offerCode}`);
 
       const errorCodes = [
         'errorofferCodeNotFound',
@@ -212,37 +316,59 @@ export class InsertAffiliate {
       ];
 
       if (errorCodes.includes(offerCode)) {
-        console.warn('[Insert Affiliate] Offer Code Not Found');
+        this.verboseLog('Offer code not found or invalid');
         return;
       }
 
       const redeemUrl = `https://apps.apple.com/redeem?ctx=offercodes&id=${offerCodeUrlId}&code=${offerCode}`;
+      this.verboseLog(`Opening redeem URL: ${redeemUrl}`);
       window.open(redeemUrl, '_blank');
+      this.verboseLog('Redeem URL opened successfully');
     } catch (err) {
-      console.error('[Insert Affiliate] Error fetching/opening offer code:', err);
+      this.verboseLog(`Error fetching/opening offer code: ${err}`);
     }
   }
 
   private static async getOrCreateUserID(): Promise<string> {
+    this.verboseLog('Getting or creating user ID...');
     let id = await getValue('userId');
+    this.verboseLog(`Existing user ID: ${id || 'none'}`);
+
     if (!id) {
+      this.verboseLog('Generating new user ID...');
       id = generateShortDeviceID();
       await saveValue('userId', id);
+      this.verboseLog(`Generated and saved new user ID: ${id}`);
     }
+
     return id;
   }
 
   private static async fetchShortLink(link: string): Promise<string | null> {
     try {
+      this.verboseLog('Converting deep link to short link...');
       const encoded = encodeURIComponent(link);
       const companyCode = this.companyCode || await getValue('companyCode');
-      if (!companyCode) return null;
+      this.verboseLog(`Company code: ${companyCode || 'empty'}`);
 
-      const res = await fetch(`https://api.insertaffiliate.com/V1/convert-deep-link-to-short-link?companyId=${companyCode}&deepLinkUrl=${encoded}`);
+      if (!companyCode) {
+        this.verboseLog('No company code available, cannot convert link');
+        return null;
+      }
+
+      const url = `https://api.insertaffiliate.com/V1/convert-deep-link-to-short-link?companyId=${companyCode}&deepLinkUrl=${encoded}`;
+      this.verboseLog(`Making API call to: ${url}`);
+
+      const res = await fetch(url);
+      this.verboseLog(`API response status: ${res.status}`);
+
       const data = await res.json();
-      return data?.shortLink || null;
+      const shortLink = data?.shortLink || null;
+      this.verboseLog(`Short link received: ${shortLink || 'none'}`);
+
+      return shortLink;
     } catch (err: any) {
-      console.error('[Insert Affiliate] Failed to fetch short link:', err?.message || err);
+      this.verboseLog(`Error fetching short link: ${err?.message || err}`);
       return null;
     }
   }
