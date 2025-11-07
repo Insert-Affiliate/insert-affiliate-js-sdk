@@ -26,6 +26,7 @@ export class InsertAffiliate {
   private static companyCode: string | null = null;
   private static verboseLogging: boolean = false;
   private static insertAffiliateIdentifierChangeCallback: InsertAffiliateIdentifierChangeCallback | null = null;
+  private static affiliateAttributionActiveTime: number | null = null; // in milliseconds
 
   private static verboseLog(message: string): void {
     if (this.verboseLogging) {
@@ -33,7 +34,7 @@ export class InsertAffiliate {
     }
   }
 
-  static async initialize(code: string | null, verboseLogging: boolean = false): Promise<void> {
+  static async initialize(code: string | null, verboseLogging: boolean = false, affiliateAttributionActiveTime?: number): Promise<void> {
     this.verboseLogging = verboseLogging;
 
     if (verboseLogging) {
@@ -48,13 +49,21 @@ export class InsertAffiliate {
     }
     this.companyCode = code;
     await saveValue('companyCode', code || '');
+
+    // Set attribution timeout if provided
+    if (affiliateAttributionActiveTime !== undefined) {
+      this.affiliateAttributionActiveTime = affiliateAttributionActiveTime;
+      await saveValue('affiliateAttributionActiveTime', affiliateAttributionActiveTime.toString());
+      this.verboseLog(`Attribution timeout set to: ${affiliateAttributionActiveTime}ms`);
+    }
+
     this.isInitialized = true;
     this.verboseLog(`SDK initialized ${code ? `with company code: ${code}` : 'without a company code.'}`);
     this.verboseLog('Company code saved to storage');
     this.verboseLog('SDK marked as initialized');
   }
 
-  static async returnInsertAffiliateIdentifier(): Promise<string | null> {
+  static async returnInsertAffiliateIdentifier(ignoreTimeout: boolean = false): Promise<string | null> {
     this.verboseLog('Getting insert affiliate identifier...');
     const userId = await this.getOrCreateUserID();
     const referrerLink = await getValue('referrerLink');
@@ -63,6 +72,17 @@ export class InsertAffiliate {
     if (!referrerLink) {
       this.verboseLog('No referrer link found, returning null');
       return null;
+    }
+
+    // Check attribution timeout unless explicitly ignored
+    if (!ignoreTimeout) {
+      const isValid = await this.isAffiliateAttributionValid();
+      if (!isValid) {
+        this.verboseLog('Attribution has expired, returning null');
+        return null;
+      }
+    } else {
+      this.verboseLog('Ignoring attribution timeout');
     }
 
     const identifier = `${referrerLink}-${userId}`;
@@ -89,9 +109,22 @@ export class InsertAffiliate {
       return null;
     }
 
+    // Check if the same short code is already stored
+    const existingShortCode = await getValue('referrerLink');
+    if (existingShortCode === shortCode) {
+      this.verboseLog(`Short code ${shortCode} is already set, not updating attribution date`);
+      const identifier = `${shortCode}-${userId}`;
+      this.verboseLog(`Returning existing identifier: ${identifier}`);
+      return identifier;
+    }
+
     this.verboseLog(`Saving short code to storage: ${shortCode}`);
     await saveValue('referrerLink', shortCode);
-    this.verboseLog('Short code saved successfully');
+
+    // Store the attribution date
+    const storedDate = new Date().toISOString();
+    await saveValue('affiliateStoredDate', storedDate);
+    this.verboseLog(`Short code saved successfully with stored date: ${storedDate}`);
 
     const identifier = `${shortCode}-${userId}`;
     this.verboseLog(`Returning identifier: ${identifier}`);
@@ -123,6 +156,45 @@ export class InsertAffiliate {
   static setInsertAffiliateIdentifierChangeCallback(callback: InsertAffiliateIdentifierChangeCallback | null): void {
     this.verboseLog(`Setting affiliate identifier change callback: ${callback ? 'callback provided' : 'callback cleared'}`);
     this.insertAffiliateIdentifierChangeCallback = callback;
+  }
+
+  static async isAffiliateAttributionValid(): Promise<boolean> {
+    this.verboseLog('Checking if affiliate attribution is valid...');
+
+    const storedDateStr = await getValue('affiliateStoredDate');
+    if (!storedDateStr) {
+      this.verboseLog('No stored date found, attribution invalid');
+      return false;
+    }
+
+    // Get timeout value from storage or class property
+    let timeoutMs = this.affiliateAttributionActiveTime;
+    if (timeoutMs === null) {
+      const storedTimeout = await getValue('affiliateAttributionActiveTime');
+      timeoutMs = storedTimeout ? parseInt(storedTimeout, 10) : null;
+    }
+
+    // If no timeout is set, attribution never expires
+    if (timeoutMs === null) {
+      this.verboseLog('No attribution timeout configured, attribution is valid');
+      return true;
+    }
+
+    const storedDate = new Date(storedDateStr);
+    const currentDate = new Date();
+    const elapsedMs = currentDate.getTime() - storedDate.getTime();
+
+    const isValid = elapsedMs <= timeoutMs;
+    this.verboseLog(`Attribution stored: ${storedDateStr}, elapsed: ${elapsedMs}ms, timeout: ${timeoutMs}ms, valid: ${isValid}`);
+
+    return isValid;
+  }
+
+  static async getAffiliateStoredDate(): Promise<string | null> {
+    this.verboseLog('Getting affiliate stored date...');
+    const storedDate = await getValue('affiliateStoredDate');
+    this.verboseLog(`Stored date: ${storedDate || 'none'}`);
+    return storedDate;
   }
 
   static async trackEvent(eventName: string): Promise<void> {
