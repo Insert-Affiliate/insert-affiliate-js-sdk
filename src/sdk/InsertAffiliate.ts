@@ -19,10 +19,13 @@ interface ExpectedTransactionPayload {
   storedDate: string;
 }
 
+export type InsertAffiliateIdentifierChangeCallback = (identifier: string | null) => void;
+
 export class InsertAffiliate {
   private static isInitialized: boolean = false;
   private static companyCode: string | null = null;
   private static verboseLogging: boolean = false;
+  private static insertAffiliateIdentifierChangeCallback: InsertAffiliateIdentifierChangeCallback | null = null;
 
   private static verboseLog(message: string): void {
     if (this.verboseLogging) {
@@ -92,6 +95,13 @@ export class InsertAffiliate {
 
     const identifier = `${shortCode}-${userId}`;
     this.verboseLog(`Returning identifier: ${identifier}`);
+
+    // Trigger callback if one is registered
+    if (this.insertAffiliateIdentifierChangeCallback) {
+      this.verboseLog(`Triggering callback with identifier: ${identifier}`);
+      this.insertAffiliateIdentifierChangeCallback(identifier);
+    }
+
     return identifier;
   }
 
@@ -108,6 +118,11 @@ export class InsertAffiliate {
 
     this.verboseLog('Calling setInsertAffiliateIdentifier with short code');
     await this.setInsertAffiliateIdentifier(shortCode);
+  }
+
+  static setInsertAffiliateIdentifierChangeCallback(callback: InsertAffiliateIdentifierChangeCallback | null): void {
+    this.verboseLog(`Setting affiliate identifier change callback: ${callback ? 'callback provided' : 'callback cleared'}`);
+    this.insertAffiliateIdentifierChangeCallback = callback;
   }
 
   static async trackEvent(eventName: string): Promise<void> {

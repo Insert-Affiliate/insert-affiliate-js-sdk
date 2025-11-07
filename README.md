@@ -212,41 +212,118 @@ app.post('/create-checkout-session', async (req, res) => {
 
 ## Deep Link Setup [Required]
 Insert Affiliate requires a Deep Linking platform to create links for your affiliates. Our platform works with **any** deep linking provider, and you only need to follow these steps:
-1. **Create a deep link** in your chosen third-party platform and pass it to our dashboard when an affiliate signs up. 
+1. **Create a deep link** in your chosen third-party platform and pass it to our dashboard when an affiliate signs up.
 2. **Handle deep link clicks** in your app by passing the clicked link:
    ```javascript
    InsertAffiliate.setInsertAffiliateIdentifier(data["~referring_link"]);
    ```
+
+### Using the Callback for Automatic Integration
+
+The SDK provides a callback mechanism that triggers whenever the affiliate identifier changes. This is perfect for automatically tracking and storing the affiliate identifier when a user clicks an affiliate link.
+
+#### Example: Storing Affiliate Identifier for Checkout
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Set up the callback to store the affiliate identifier for later use
+let currentAffiliateId = null;
+
+InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
+  if (identifier) {
+    console.log('Affiliate identifier changed:', identifier);
+    currentAffiliateId = identifier;
+  }
+});
+
+// Later, when creating a Stripe checkout session
+const response = await fetch('https://your-backend.com/create-checkout-session', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    priceId: 'price_xxxxx',
+    insertAffiliate: currentAffiliateId,
+    successUrl: window.location.origin + '/success',
+    cancelUrl: window.location.origin + '/canceled',
+  }),
+});
+```
+
+#### Example: Updating UI When Affiliate Link is Clicked
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Set up the callback to update UI when an affiliate link is detected
+InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
+  if (identifier) {
+    console.log('Affiliate identifier changed:', identifier);
+
+    // Show a banner or notification to the user
+    const banner = document.getElementById('affiliate-banner');
+    if (banner) {
+      banner.textContent = 'You used a special affiliate link!';
+      banner.style.display = 'block';
+    }
+
+    // Track the affiliate click event
+    analytics.track('affiliate_link_clicked', { identifier });
+  }
+});
+```
+
+**Benefits of using the callback:**
+- Automatically captures affiliate identifiers when users click links
+- No need to manually check for identifier updates
+- Ensures attribution is always up-to-date
+- Simplifies integration code
+- Can trigger UI updates or analytics events
+
+**To clear the callback:**
+```javascript
+InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
+```
 
 ### Deep Linking with Branch.io
 To set up deep linking with Branch.io, follow these steps:
 
 1. Create a deep link in Branch and pass it to our dashboard when an affiliate signs up.
     - Example: [Create Affiliate](https://docs.insertaffiliate.com/create-affiliate).
-2. Modify Your Deep Link Handling
-    - After setting up your Branch integration, add the following code to initialise the Insert Affiliate SDK in your iOS app:
+2. Set up the callback to automatically capture affiliate identifiers
+3. Set up Branch deep link handling
 
+#### Example with Branch.io
 
 ```javascript
 import { BranchDeepLinks, BranchInitEvent } from 'capacitor-branch-deep-links';
 import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Set up callback to automatically capture affiliate identifier when user clicks a link
+InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
+  if (identifier) {
+    console.log('Affiliate identifier changed:', identifier);
+    console.log('Affiliate attribution captured successfully');
+  }
+});
 
 let branchInitialised = false;
 
 async function setUpBranchListener() {
     if (branchInitialised) return;
     branchInitialised = true;
-    
+
     try {
         await BranchDeepLinks.addListener('init', async (event: BranchInitEvent) => {
             const clicked = event?.referringParams?.['+clicked_branch_link'];
             const referringLink = event?.referringParams?.['~referring_link'];
-            
+
             if (clicked && referringLink) {
+                // This will automatically trigger the callback
                 await InsertAffiliate.setInsertAffiliateIdentifier(referringLink);
             }
         });
-        
+
         BranchDeepLinks.addListener('initError', (error: any) => {
             console.error('Branch init error:', error);
         });
