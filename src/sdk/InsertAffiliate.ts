@@ -27,6 +27,7 @@ export class InsertAffiliate {
   private static verboseLogging: boolean = false;
   private static insertAffiliateIdentifierChangeCallback: InsertAffiliateIdentifierChangeCallback | null = null;
   private static affiliateAttributionActiveTime: number | null = null; // in milliseconds
+  private static offerCode: string | null = null;
 
   private static verboseLog(message: string): void {
     if (this.verboseLogging) {
@@ -129,6 +130,9 @@ export class InsertAffiliate {
     const identifier = `${shortCode}-${userId}`;
     this.verboseLog(`Returning identifier: ${identifier}`);
 
+    // Auto-fetch and store offer code (use just the short code, not the full identifier)
+    await this.fetchAndStoreOfferCode(shortCode);
+
     // Trigger callback if one is registered
     if (this.insertAffiliateIdentifierChangeCallback) {
       this.verboseLog(`Triggering callback with identifier: ${identifier}`);
@@ -195,6 +199,76 @@ export class InsertAffiliate {
     const storedDate = await getValue('affiliateStoredDate');
     this.verboseLog(`Stored date: ${storedDate || 'none'}`);
     return storedDate;
+  }
+
+  static async getOfferCode(): Promise<string | null> {
+    this.verboseLog('Getting offer code...');
+
+    // Return cached offer code if available
+    if (this.offerCode) {
+      this.verboseLog(`Returning cached offer code: ${this.offerCode}`);
+      return this.offerCode;
+    }
+
+    // Try to get from storage
+    const storedOfferCode = await getValue('offerCode');
+    if (storedOfferCode) {
+      this.verboseLog(`Returning stored offer code: ${storedOfferCode}`);
+      this.offerCode = storedOfferCode;
+      return storedOfferCode;
+    }
+
+    this.verboseLog('No offer code found');
+    return null;
+  }
+
+  private static async fetchAndStoreOfferCode(shortCode: string): Promise<void> {
+    this.verboseLog(`Fetching offer code for short code: ${shortCode}`);
+
+    try {
+      // Get company code
+      const companyCode = this.companyCode || await getValue('companyCode');
+      if (!companyCode) {
+        this.verboseLog('Cannot fetch offer code: no company code available');
+        return;
+      }
+
+      // Use the more efficient endpoint with company code and just the short code
+      const encoded = encodeURIComponent(shortCode);
+      const url = `https://api.insertaffiliate.com/v1/affiliateReturnOfferCode/${companyCode}/${encoded}`;
+      this.verboseLog(`Making API call to: ${url}`);
+
+      const response = await fetch(url);
+      this.verboseLog(`API response status: ${response.status}`);
+
+      if (!response.ok) {
+        this.verboseLog(`Failed to fetch offer code, status: ${response.status}`);
+        return;
+      }
+
+      const offerCode = (await response.text()).replace(/[^a-zA-Z0-9]/g, '');
+      this.verboseLog(`Received offer code: ${offerCode}`);
+
+      // Check for error codes
+      const errorCodes = [
+        'errorofferCodeNotFound',
+        'errorAffiliateoffercodenotfoundinanycompany',
+        'errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas',
+        'Routenotfound'
+      ];
+
+      if (errorCodes.includes(offerCode)) {
+        this.verboseLog('Offer code not found or invalid');
+        return;
+      }
+
+      // Store offer code
+      this.offerCode = offerCode;
+      await saveValue('offerCode', offerCode);
+      this.verboseLog(`Offer code stored successfully: ${offerCode}`);
+    } catch (error) {
+      this.verboseLog(`Error fetching offer code: ${error}`);
+    }
   }
 
   static async trackEvent(eventName: string): Promise<void> {
