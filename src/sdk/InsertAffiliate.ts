@@ -62,6 +62,35 @@ export class InsertAffiliate {
     this.verboseLog(`SDK initialized ${code ? `with company code: ${code}` : 'without a company code.'}`);
     this.verboseLog('Company code saved to storage');
     this.verboseLog('SDK marked as initialized');
+
+    // Check for insertAffiliate URL parameter
+    await this.checkForInsertAffiliateParam();
+  }
+
+  private static async checkForInsertAffiliateParam(): Promise<void> {
+    this.verboseLog('Checking for insertAffiliate URL parameter...');
+
+    try {
+      // Only run in browser environments
+      if (typeof window === 'undefined' || !window.location) {
+        this.verboseLog('Not in browser environment, skipping URL parameter check');
+        return;
+      }
+
+      this.verboseLog(`Current URL: ${window.location.href}`);
+      const urlParams = new URLSearchParams(window.location.search);
+      const insertAffiliateParam = urlParams.get('insertAffiliate');
+
+      if (insertAffiliateParam) {
+        this.verboseLog(`Found insertAffiliate URL parameter: ${insertAffiliateParam}`);
+        await this.setShortCode(insertAffiliateParam);
+        this.verboseLog('Successfully processed insertAffiliate URL parameter');
+      } else {
+        this.verboseLog('No insertAffiliate URL parameter found');
+      }
+    } catch (error) {
+      this.verboseLog(`Error checking for insertAffiliate URL parameter: ${error}`);
+    }
   }
 
   static async returnInsertAffiliateIdentifier(ignoreTimeout: boolean = false): Promise<string | null> {

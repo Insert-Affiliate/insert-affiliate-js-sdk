@@ -209,14 +209,136 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 ```
 
+#### Configuring Branch.io Links for Stripe Payments
+
+If you're using Branch.io deep links to drive users to your Stripe payment forms, you need to configure the web redirect URL to include the affiliate's short code. This ensures proper affiliate tracking when users land on your payment page.
+
+**Creating a Branch.io Quick Link for Stripe Checkout:**
+
+1. **Create a new Quick Link** in your Branch.io dashboard
+2. **Navigate to the "Redirects" page** in the link configuration
+3. **Select "Web URL"** as the redirect destination
+4. **Configure the URL** to point to your web app hosting the Stripe payment form:
+   - Enter your web app's URL
+   - Append the parameter: `?insertAffiliate={affiliateShortCode}`
+   - Replace `{affiliateShortCode}` with the actual [short code](https://docs.insertaffiliate.com/short-codes) of the affiliate you're creating the link for
+
+**Example Web URL:**
+```
+https://yourwebsite.com?insertAffiliate=ABC123
+```
+
+Where `ABC123` is the specific affiliate's short code. When users click this Branch.io link and land on your website, the Insert Affiliate SDK will automatically detect and process the `insertAffiliate` parameter, ensuring the subsequent Stripe payment is properly attributed to the affiliate.
+
+Learn more about short codes in our [Short Codes documentation](https://docs.insertaffiliate.com/short-codes).
+
+#### Configuring AppsFlyer OneLinks for Stripe Payments
+
+If you're using AppsFlyer OneLinks to drive users to your Stripe payment forms, you need to configure the desktop web redirect URL to include the affiliate's short code. This ensures proper affiliate tracking when users land on your payment page.
+
+**Creating an AppsFlyer OneLink for Stripe Checkout:**
+
+1. **Create a new OneLink** in your AppsFlyer dashboard
+2. **Navigate to the link configuration settings**
+3. **Under "When link is clicked on desktop web page"**, configure the redirect URL
+4. **Set the URL** to point to your web app hosting the Stripe payment form:
+   - Enter your web app's URL
+   - Append the parameter: `?insertAffiliate={affiliateShortCode}`
+   - Replace `{affiliateShortCode}` with the actual [short code](https://docs.insertaffiliate.com/short-codes) of the affiliate you're creating the link for
+
+**Example Desktop Web URL:**
+```
+https://yourwebsite.com?insertAffiliate=ABC123
+```
+
+Where `ABC123` is the specific affiliate's short code. When users click this AppsFlyer OneLink and land on your website, the Insert Affiliate SDK will automatically detect and process the `insertAffiliate` parameter, ensuring the subsequent Stripe payment is properly attributed to the affiliate.
+
+Learn more about short codes in our [Short Codes documentation](https://docs.insertaffiliate.com/short-codes).
+
+#### Insert Links for Stripe Payments (Automatic)
+
+If you're using **Insert Links** (Insert Affiliate's built-in deep linking solution) to drive users to your Stripe payment forms, **no additional configuration is needed!**
+
+Insert Links automatically includes the `insertAffiliate` parameter in web redirect URLs. When users click an Insert Links affiliate link and land on your website, the Insert Affiliate SDK will automatically:
+
+1. **Detect** the `insertAffiliate` parameter in the URL
+2. **Process** the affiliate attribution
+3. **Track** the subsequent Stripe payment to the correct affiliate
+
+**No manual setup required** - just initialize the SDK and it handles everything automatically.
+
+Learn more about Insert Links in our [Insert Links documentation](https://docs.insertaffiliate.com/insert-links).
+
 
 ## Deep Link Setup [Required]
-Insert Affiliate requires a Deep Linking platform to create links for your affiliates. Our platform works with **any** deep linking provider, and you only need to follow these steps:
-1. **Create a deep link** in your chosen third-party platform and pass it to our dashboard when an affiliate signs up.
-2. **Handle deep link clicks** in your app by passing the clicked link:
-   ```javascript
-   InsertAffiliate.setInsertAffiliateIdentifier(data["~referring_link"]);
-   ```
+
+### Web-Based Affiliate Tracking
+
+For web applications, the SDK automatically detects affiliate identifiers from URL parameters. When users visit your website through an affiliate link, the SDK will capture and process the affiliate information.
+
+#### Automatic URL Parameter Detection
+
+The SDK automatically checks for an `insertAffiliate` URL parameter during initialization. If found, it will automatically call `setShortCode()` to process the affiliate attribution.
+
+**Example URL:**
+```
+https://yourwebsite.com?insertAffiliate=ABC123
+```
+
+When a user visits this URL, the SDK will automatically:
+1. Detect the `insertAffiliate=ABC123` parameter
+2. Call `setShortCode('ABC123')`
+3. Store the affiliate attribution
+4. Trigger any registered callbacks
+
+**No additional code required!** Simply initialize the SDK and it will handle URL parameters automatically.
+
+### Deep Linking Platforms (Branch.io / AppsFlyer / Insert Links)
+
+If you're using a deep linking platform for your mobile apps, the SDK can automatically capture affiliate attribution when users land on your website.
+
+#### Insert Links (Automatic)
+
+**Insert Links** automatically includes the `insertAffiliate` parameter in web redirect URLs - no configuration needed! When users click an Insert Links affiliate link and land on your website, the SDK will automatically capture the attribution.
+
+#### Branch.io & AppsFlyer (Manual Configuration Required)
+
+For **Branch.io** and **AppsFlyer**, you need to manually configure the **web fallback URL** to include the `insertAffiliate` parameter:
+
+**Setup Steps:**
+
+1. **Create your deep link** in Branch.io or AppsFlyer as normal
+2. **Configure the web fallback/redirect URL** to include the affiliate's short code as a URL parameter:
+   - **Branch.io**: Set the web URL fallback to: `https://yourwebsite.com?insertAffiliate=AFFILIATE_SHORT_CODE`
+   - **AppsFlyer**: Set the web destination to: `https://yourwebsite.com?insertAffiliate=AFFILIATE_SHORT_CODE`
+3. **Initialize the SDK** in your web app - it will automatically detect and process the parameter
+
+#### Example Configuration (Branch.io & AppsFlyer):
+
+**Branch.io Link Configuration:**
+- iOS URL: `yourapp://` (your app's deep link)
+- Android URL: `yourapp://` (your app's deep link)
+- **Web URL**: `https://yourwebsite.com?insertAffiliate=ABC123`
+
+**AppsFlyer OneLink Configuration:**
+- Mobile Destination: Your app (via store or deep link)
+- **Web Destination**: `https://yourwebsite.com?insertAffiliate=ABC123`
+
+#### How It Works:
+
+This approach ensures that:
+- **Mobile users** are directed to your app via deep linking (handled by your deep linking platform)
+- **Web users** (or mobile users without the app installed) are directed to your website with the affiliate identifier
+- The SDK **automatically captures** the affiliate attribution on the web
+- Works for **any web application** that accepts payments (not just Capacitor apps)
+
+### Manual Deep Link Handling (Advanced)
+
+If you need to manually handle deep links (for hybrid apps using Capacitor), you can still use the traditional approach:
+
+```javascript
+InsertAffiliate.setInsertAffiliateIdentifier(data["~referring_link"]);
+```
 
 ### Using the Callback for Automatic Integration
 
@@ -285,15 +407,11 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
 InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 ```
 
-### Deep Linking with Branch.io
-To set up deep linking with Branch.io, follow these steps:
+### Capacitor/Hybrid App Deep Link Handling
 
-1. Create a deep link in Branch and pass it to our dashboard when an affiliate signs up.
-    - Example: [Create Affiliate](https://docs.insertaffiliate.com/create-affiliate).
-2. Set up the callback to automatically capture affiliate identifiers
-3. Set up Branch deep link handling
+For Capacitor or hybrid apps that need to handle Branch.io deep links within the app (not just web URLs), you can manually process deep link data:
 
-#### Example with Branch.io
+#### Example with Branch.io Capacitor Plugin
 
 ```javascript
 import { BranchDeepLinks, BranchInitEvent } from 'capacitor-branch-deep-links';
@@ -331,8 +449,9 @@ async function setUpBranchListener() {
         console.error('Error setting up Branch listener:', err);
     }
 }
-
 ```
+
+**Note:** For most web applications, the automatic URL parameter detection (described above) is the recommended approach.
 
 ## Additional Features
 
