@@ -230,6 +230,13 @@ export class InsertAffiliate {
     return storedDate;
   }
 
+  static async returnCompanyId(): Promise<string | null> {
+    this.verboseLog('Getting company ID...');
+    const companyCode = this.companyCode || await getValue('companyCode');
+    this.verboseLog(`Company ID: ${companyCode || 'none'}`);
+    return companyCode;
+  }
+
   static async getOfferCode(): Promise<string | null> {
     this.verboseLog('Getting offer code...');
 

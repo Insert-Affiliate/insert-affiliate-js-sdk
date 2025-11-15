@@ -94,11 +94,14 @@ await InsertAffiliate.initialize("your_company_code", true);
 ⚠️ **Important**: Disable verbose logging in production builds to avoid exposing sensitive debugging information and to optimize performance.
 
 ## In-App Purchase Setup [Required]
-Insert Affiliate requires a Receipt Verification platform to validate in-app purchases. You must choose **one** of our supported options:
-- [RevenueCat](https://www.revenuecat.com/)
-- [Stripe](https://stripe.com/)
 
-### Option 1: RevenueCat Integration
+Insert Affiliate requires a receipt verification platform to validate purchases. Choose the integration method(s) that match your platform:
+
+- **Mobile In-App Purchases (iOS/Android)**: Use [RevenueCat](https://www.revenuecat.com/)
+- **Web-Based Payments**: Use [Stripe](https://stripe.com/)
+- **Hybrid Apps**: If your app supports both native mobile purchases AND web payments, set up both integrations
+
+### Mobile In-App Purchases: RevenueCat Integration
 
 #### Code Setup
 1. **Install RevenueCat SDK** - First, complete the set up of the relevant [RevenueCat SDK](https://www.revenuecat.com/docs/getting-started/installation) to set up in-app purchases and subscriptions.
@@ -142,25 +145,38 @@ Next, you must setup a webhook to allow us to communicate directly with RevenueC
    - Copy this value
    - Paste it as the Authorization header value in your RevenueCat webhook configuration
 
-### Option 2: Stripe Integration
+### Web-Based Payments: Stripe Integration
 
-For web-based subscriptions and payments using Stripe, you'll need to pass the Insert Affiliate identifier to Stripe's metadata during checkout.
+For web-based subscriptions and payments using Stripe, you'll need to connect your Stripe account and pass the Insert Affiliate identifier and company ID to Stripe's metadata during checkout.
 
-#### Code Setup
+**📚 For complete setup instructions, see: [Stripe Web-Based Transactions Documentation](https://docs.insertaffiliate.com/stripe-web-based-transactions)**
 
-1. **Retrieve the Affiliate Identifier**
+#### Setup Steps
 
-Before creating a Stripe checkout session, retrieve the current affiliate identifier from the Insert Affiliate SDK:
+1. **Connect Your Stripe Account (Required First Step)**
+
+Before integrating the SDK code, you must connect your Stripe account to Insert Affiliate:
+
+- Go to your [Insert Affiliate dashboard settings](https://app.insertaffiliate.com/settings)
+- Navigate to the payment verification settings
+- Select **Stripe** as your verification method
+- Click **Connect with Stripe** to authorize the connection via Stripe Connect
+- Once connected, Insert Affiliate will automatically receive your Stripe events
+
+2. **Retrieve the Affiliate Identifier and Company ID**
+
+Before creating a Stripe checkout session, retrieve the current affiliate identifier and company ID from the Insert Affiliate SDK:
 
 ```javascript
 import { InsertAffiliate } from 'insert-affiliate-js-sdk';
 
 const affiliateId = await InsertAffiliate.returnInsertAffiliateIdentifier();
+const companyId = await InsertAffiliate.returnCompanyId();
 ```
 
-2. **Pass to Your Backend**
+3. **Pass to Your Backend**
 
-When calling your backend to create a Stripe checkout session, include the affiliate identifier:
+When calling your backend to create a Stripe checkout session, include both the affiliate identifier and company ID:
 
 ```javascript
 const response = await fetch('https://your-backend.com/create-checkout-session', {
@@ -171,21 +187,22 @@ const response = await fetch('https://your-backend.com/create-checkout-session',
   body: JSON.stringify({
     priceId: 'price_xxxxx',
     insertAffiliate: affiliateId,
+    insertAffiliateCompanyId: companyId,
     successUrl: window.location.origin + '/success',
     cancelUrl: window.location.origin + '/canceled',
   }),
 });
 ```
 
-3. **Store in Stripe Metadata (Backend)**
+4. **Store in Stripe Metadata (Backend)**
 
-In your backend, when creating the Stripe checkout session, store the affiliate identifier in both the session metadata and subscription metadata:
+In your backend, when creating the Stripe checkout session, store both the affiliate identifier and company ID in the session metadata and subscription metadata:
 
 ```javascript
 const stripe = require('stripe')('sk_test_xxxxx');
 
 app.post('/create-checkout-session', async (req, res) => {
-  const { priceId, insertAffiliate, successUrl, cancelUrl } = req.body;
+  const { priceId, insertAffiliate, insertAffiliateCompanyId, successUrl, cancelUrl } = req.body;
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
@@ -195,10 +212,12 @@ app.post('/create-checkout-session', async (req, res) => {
     }],
     metadata: {
       insertAffiliate: insertAffiliate || '',
+      insertAffiliateCompanyId: insertAffiliateCompanyId || '',
     },
     subscription_data: {
       metadata: {
         insertAffiliate: insertAffiliate || '',
+        insertAffiliateCompanyId: insertAffiliateCompanyId || '',
       },
     },
     success_url: successUrl,
@@ -208,6 +227,29 @@ app.post('/create-checkout-session', async (req, res) => {
   res.json({ sessionId: session.id });
 });
 ```
+
+**Required Metadata Fields:**
+- `insertAffiliate`: The affiliate's short code
+- `insertAffiliateCompanyId`: Your Insert Affiliate company ID
+
+Both fields are required for proper affiliate attribution and commission tracking. Once you've connected your Stripe account via Stripe Connect (Step 1), Insert Affiliate will automatically receive all Stripe events and read these metadata fields to credit affiliates.
+
+### Stripe with RevenueCat
+
+If you're using RevenueCat's web payment integration with Stripe Billing, you can track affiliate conversions through Insert Affiliate while using RevenueCat for subscription management.
+
+**Prerequisites:**
+- You must host your own web checkout page where Stripe Checkout is embedded (Insert Affiliate SDK needs to run on your page)
+- Follow RevenueCat's [Stripe integration guide](https://www.revenuecat.com/docs/web/integrations/stripe) to set up the RevenueCat-Stripe connection
+
+**Integration:**
+
+Simply follow the same **[Stripe Integration steps above](#web-based-payments-stripe-integration)**, which includes:
+1. Connecting your Stripe account via Stripe Connect in the Insert Affiliate dashboard
+2. Installing the SDK on your checkout page
+3. Passing the affiliate metadata to Stripe
+
+That's it! Since you've connected your Stripe account via Stripe Connect, Insert Affiliate will automatically receive all Stripe events. RevenueCat handles subscription management, while Insert Affiliate handles affiliate attribution through the Stripe metadata.
 
 #### Configuring Branch.io Links for Stripe Payments
 
@@ -360,12 +402,15 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
 });
 
 // Later, when creating a Stripe checkout session
+const companyId = await InsertAffiliate.returnCompanyId();
+
 const response = await fetch('https://your-backend.com/create-checkout-session', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     priceId: 'price_xxxxx',
     insertAffiliate: currentAffiliateId,
+    insertAffiliateCompanyId: companyId,
     successUrl: window.location.origin + '/success',
     cancelUrl: window.location.origin + '/canceled',
   }),
@@ -511,3 +556,49 @@ const userEnteredCode = 'B3SC6VRRKQ';
 
 InsertAffiliate.setShortCode(userEnteredCode);
 ```
+
+## API Reference
+
+### Core Methods
+
+#### `returnCompanyId()`
+
+Retrieves the company ID that was used during SDK initialization. This is particularly useful when integrating with payment processors like Stripe that require the company ID to be passed as metadata for proper affiliate attribution.
+
+**Returns:** `Promise<string | null>`
+- Returns the company ID if the SDK has been initialized
+- Returns `null` if no company ID is available
+
+**Example Usage:**
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Initialize the SDK first
+await InsertAffiliate.initialize('your_company_code');
+
+// Later, retrieve the company ID
+const companyId = await InsertAffiliate.returnCompanyId();
+console.log('Company ID:', companyId); // Output: 'your_company_code'
+
+// Use with Stripe checkout
+const response = await fetch('/create-checkout-session', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    priceId: 'price_xxxxx',
+    insertAffiliate: await InsertAffiliate.returnInsertAffiliateIdentifier(),
+    insertAffiliateCompanyId: companyId,
+  }),
+});
+```
+
+**Use Cases:**
+- **Stripe Integration**: Pass the company ID as metadata to Stripe for proper webhook attribution
+- **Backend API Calls**: Include the company ID in API requests for multi-tenant applications
+- **Analytics**: Track which company's affiliate links are being used
+
+**Notes:**
+- The company ID is set during SDK initialization and persists in local storage
+- This method retrieves the value from memory first, falling back to storage if needed
+- Returns the same value that was passed to `initialize()`
