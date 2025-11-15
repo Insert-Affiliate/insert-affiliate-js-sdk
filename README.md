@@ -561,6 +561,60 @@ InsertAffiliate.setShortCode(userEnteredCode);
 
 ### Core Methods
 
+#### `returnInsertAffiliateIdentifier()`
+
+Retrieves the current affiliate identifier that has been set via deep links, URL parameters, or short codes. This is the primary method for getting the affiliate's unique identifier to pass to payment processors or analytics platforms.
+
+**Parameters:**
+- `ignoreTimeout` (optional, boolean): Set to `true` to retrieve the identifier even if the attribution window has expired. Default is `false`.
+
+**Returns:** `Promise<string | null>`
+- Returns the affiliate identifier if one has been set and is still valid
+- Returns `null` if no affiliate identifier is set or if the attribution window has expired
+
+**Example Usage:**
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Initialize the SDK first
+await InsertAffiliate.initialize('your_company_code');
+
+// Later, retrieve the affiliate identifier (respects attribution window)
+const affiliateId = await InsertAffiliate.returnInsertAffiliateIdentifier();
+console.log('Affiliate ID:', affiliateId); // Output: 'ABC123' or null
+
+// Retrieve even if attribution window expired
+const affiliateIdIgnoreTimeout = await InsertAffiliate.returnInsertAffiliateIdentifier(true);
+console.log('Affiliate ID (ignore timeout):', affiliateIdIgnoreTimeout);
+
+// Use with Stripe checkout
+const response = await fetch('/create-checkout-session', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    priceId: 'price_xxxxx',
+    insertAffiliate: affiliateId,
+    insertAffiliateCompanyId: await InsertAffiliate.returnCompanyId(),
+    successUrl: window.location.origin + '/success',
+    cancelUrl: window.location.origin + '/canceled',
+  }),
+});
+```
+
+**Use Cases:**
+- **Payment Attribution**: Pass the affiliate ID to Stripe, RevenueCat, or other payment processors
+- **Analytics Tracking**: Include affiliate information in analytics events
+- **Conditional UI**: Show special messaging or discounts when an affiliate link was used
+- **Backend API Calls**: Send affiliate information to your backend for custom tracking
+
+**Notes:**
+- The identifier is set when users click affiliate links or enter short codes
+- By default, the identifier expires after the attribution window (configurable in your dashboard)
+- Use `ignoreTimeout: true` if you need the identifier regardless of expiration
+- Returns `null` if no affiliate link has been clicked or short code entered
+- The identifier persists in local storage across sessions
+
 #### `returnCompanyId()`
 
 Retrieves the company ID that was used during SDK initialization. This is particularly useful when integrating with payment processors like Stripe that require the company ID to be passed as metadata for proper affiliate attribution.
