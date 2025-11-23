@@ -578,26 +578,103 @@ Short codes are unique, 3 to 25 character alphanumeric identifiers that affiliat
 
 For more information, visit the [Insert Affiliate Short Codes Documentation](https://docs.insertaffiliate.com/short-codes).
 
-### Setting a Short Code
+### Getting Affiliate Details
 
-Use the `setShortCode` method to associate a short code with an affiliate. This is ideal for scenarios where users enter the code via an input field, pop-up, or similar UI element.
+You can retrieve detailed information about an affiliate by their short code or deep link using the `getAffiliateDetails` method. This is useful for displaying affiliate information to users or showing personalized content based on the referrer.
 
-Short codes must meet the following criteria:
-- Between **3 and 25 characters long**.
-- Contain only **letters and numbers** (alphanumeric characters).
-- Replace {{ user_entered_short_code }} with the short code the user enters through your chosen input method, i.e. an input field / pop up element
+**Return Value:** Returns a `Promise<AffiliateDetails | null>`:
+- `affiliateName`: The name of the affiliate
+- `affiliateShortCode`: The affiliate's short code
+- `deeplinkUrl`: The affiliate's deep link URL
 
+Returns `null` if:
+- The affiliate code doesn't exist
+- The company code is not initialized
+- There's a network error or API issue
 
-#### Example Integration
-Below is an example SwiftUI implementation where users can enter a short code, which will be validated and associated with the affiliate's account:
+**Important Notes:**
+- This method **does not store or set** the affiliate identifier - it only retrieves information
+- Use `setShortCode()` to actually associate an affiliate with a user
+- The method automatically strips UUIDs from codes (e.g., "ABC123-uuid" becomes "ABC123")
+- Works with both short codes and deep link URLs
+
+#### Example Usage
 
 ```javascript
 import { InsertAffiliate } from 'insert-affiliate-js-sdk';
 
-// Example: user entered this in a form
-const userEnteredCode = 'B3SC6VRRKQ';
+// Get affiliate details for a specific code
+const details = await InsertAffiliate.getAffiliateDetails('JOIN123');
 
-InsertAffiliate.setShortCode(userEnteredCode);
+if (details) {
+  console.log(`Affiliate Name: ${details.affiliateName}`);
+  console.log(`Short Code: ${details.affiliateShortCode}`);
+  console.log(`Deep Link: ${details.deeplinkUrl}`);
+
+  // Update UI with affiliate name
+  document.getElementById('referrer').textContent = `Referred by: ${details.affiliateName}`;
+} else {
+  console.log('Affiliate not found');
+}
+```
+
+### Setting a Short Code
+
+Use the `setShortCode` method to validate and associate a short code with an affiliate. This is ideal for scenarios where users enter the code via an input field, pop-up, or similar UI element.
+
+**Return Value:** Returns a `Promise<boolean>`:
+- Returns **`true`** if the short code exists and was successfully validated and stored
+- Returns **`false`** if the short code does not exist or validation failed
+
+This allows you to provide immediate feedback to users about whether their entered code is valid.
+
+**Short Code Requirements:**
+- Between **3 and 25 characters long**
+- Contain only **letters and numbers** (alphanumeric characters)
+
+**Important Notes:**
+- The method validates the short code against the Insert Affiliate API before storing it
+- Validation checks both format (length, alphanumeric) and existence in your affiliate database
+- Short codes are automatically converted to uppercase
+- Use the return value to show success/error messages to your users
+
+#### Basic Usage
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+// Basic usage without validation feedback
+await InsertAffiliate.setShortCode('JOIN123');
+```
+
+#### Recommended Usage with Validation Feedback
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+async function handleShortCodeSubmit(userEnteredCode) {
+  const isValid = await InsertAffiliate.setShortCode(userEnteredCode);
+
+  if (isValid) {
+    // Show success message
+    alert('Affiliate code applied successfully!');
+
+    // Check for associated offer
+    const offerCode = await InsertAffiliate.getOfferCode();
+    if (offerCode) {
+      alert(`You've unlocked a special offer: ${offerCode}`);
+    }
+  } else {
+    // Show error message
+    alert('Invalid affiliate code. Please check and try again.');
+  }
+}
+
+// Example: user clicks submit button
+document.getElementById('submitButton').addEventListener('click', async () => {
+  const code = document.getElementById('shortCodeInput').value;
+  await handleShortCodeSubmit(code);
+});
 ```
 
 ## API Reference

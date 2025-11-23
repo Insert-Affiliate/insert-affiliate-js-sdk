@@ -19,6 +19,12 @@ interface ExpectedTransactionPayload {
   storedDate: string;
 }
 
+export interface AffiliateDetails {
+  affiliateName: string;
+  affiliateShortCode: string;
+  deeplinkUrl: string;
+}
+
 export type InsertAffiliateIdentifierChangeCallback = (identifier: string | null) => void;
 
 export class InsertAffiliate {
@@ -171,19 +177,38 @@ export class InsertAffiliate {
     return identifier;
   }
 
-  static async setShortCode(shortCode: string): Promise<void> {
+  /**
+   * Validates and sets a short code for affiliate tracking
+   * Validates the short code against the API before storing
+   * @param shortCode The short code to validate and set
+   * @returns true if the code exists and was successfully validated and stored, false otherwise
+   */
+  static async setShortCode(shortCode: string): Promise<boolean> {
     this.verboseLog(`Setting short code. Input: ${shortCode}`);
 
     const valid = /^[a-zA-Z0-9]{3,25}$/.test(shortCode);
     this.verboseLog(`Short code validation: ${valid ? 'Valid' : 'Invalid'}`);
 
     if (!valid) {
-      this.verboseLog('Invalid short code, aborting');
-      return;
+      this.verboseLog('Invalid short code format, aborting');
+      return false;
     }
 
+    // Validate that the short code exists in the system
+    const affiliateDetails = await this.getAffiliateDetails(shortCode);
+    if (!affiliateDetails) {
+      this.verboseLog(`Short code '${shortCode}' does not exist or validation failed`);
+      console.error(`[Insert Affiliate] Error: Short code '${shortCode}' does not exist or validation failed.`);
+      return false;
+    }
+
+    this.verboseLog(`Short code validated successfully for affiliate: ${affiliateDetails.affiliateName}`);
+    console.log(`[Insert Affiliate] Short code validated successfully for affiliate: ${affiliateDetails.affiliateName}`);
+
+    // If validation passes, set the Insert Affiliate Identifier
     this.verboseLog('Calling setInsertAffiliateIdentifier with short code');
     await this.setInsertAffiliateIdentifier(shortCode);
+    return true;
   }
 
   static setInsertAffiliateIdentifierChangeCallback(callback: InsertAffiliateIdentifierChangeCallback | null): void {
@@ -228,6 +253,70 @@ export class InsertAffiliate {
     const storedDate = await getValue('affiliateStoredDate');
     this.verboseLog(`Stored date: ${storedDate || 'none'}`);
     return storedDate;
+  }
+
+  /**
+   * Retrieve detailed information about an affiliate by their short code or deep link
+   * This method queries the API and does not store or set the affiliate identifier
+   * @param affiliateCode The short code or deep link to look up
+   * @returns AffiliateDetails if found, null otherwise
+   */
+  static async getAffiliateDetails(affiliateCode: string): Promise<AffiliateDetails | null> {
+    this.verboseLog(`Getting affiliate details for: ${affiliateCode}`);
+
+    const companyCode = this.companyCode || await getValue('companyCode');
+    if (!companyCode) {
+      this.verboseLog('Cannot get affiliate details: no company code available');
+      return null;
+    }
+
+    // Strip UUID from code if present (e.g., "ABC123-uuid" becomes "ABC123")
+    const cleanCode = affiliateCode.includes('-') ? affiliateCode.split('-')[0] : affiliateCode;
+    this.verboseLog(`Clean code: ${cleanCode}`);
+
+    try {
+      const url = 'https://api.insertaffiliate.com/V1/checkAffiliateExists';
+      const payload = {
+        companyId: companyCode,
+        affiliateCode: cleanCode,
+      };
+
+      this.verboseLog(`Making API call to: ${url}`);
+      this.verboseLog(`Payload: ${JSON.stringify(payload)}`);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      this.verboseLog(`API response status: ${response.status}`);
+
+      if (!response.ok) {
+        this.verboseLog(`Failed to get affiliate details, status: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      this.verboseLog(`API response data: ${JSON.stringify(data)}`);
+
+      if (data.exists && data.affiliate) {
+        const details: AffiliateDetails = {
+          affiliateName: data.affiliate.affiliateName,
+          affiliateShortCode: data.affiliate.affiliateShortCode,
+          deeplinkUrl: data.affiliate.deeplinkurl,
+        };
+
+        this.verboseLog(`Successfully retrieved affiliate details for: ${details.affiliateName}`);
+        return details;
+      }
+
+      this.verboseLog('Affiliate does not exist');
+      return null;
+    } catch (error) {
+      this.verboseLog(`Error fetching affiliate details: ${error}`);
+      return null;
+    }
   }
 
   static async returnCompanyId(): Promise<string | null> {
@@ -498,8 +587,18 @@ export class InsertAffiliate {
     this.verboseLog(`Encoded affiliate link: ${encoded}`);
 
     try {
+      // Get company code
+      const companyCode = this.companyCode || await getValue('companyCode');
+      if (!companyCode) {
+        this.verboseLog('Cannot fetch offer code: no company code available');
+        return;
+      }
+
       this.verboseLog('Making API call to fetch offer code...');
-      const res = await fetch(`https://api.insertaffiliate.com/v1/affiliateReturnOfferCode/${encoded}`);
+      const url = `https://api.insertaffiliate.com/v1/affiliateReturnOfferCode/${companyCode}/${encoded}`;
+      this.verboseLog(`API URL: ${url}`);
+
+      const res = await fetch(url);
       this.verboseLog(`API response status: ${res.status}`);
 
       const offerCode = (await res.text()).replace(/[^a-zA-Z0-9]/g, '');
