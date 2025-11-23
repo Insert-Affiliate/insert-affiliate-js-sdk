@@ -97,7 +97,7 @@ await InsertAffiliate.initialize("your_company_code", true);
 
 Insert Affiliate requires a receipt verification platform to validate purchases. Choose the integration method(s) that match your platform:
 
-- **Mobile In-App Purchases (iOS/Android)**: Use [RevenueCat](https://www.revenuecat.com/)
+- **Mobile In-App Purchases (iOS/Android) or RevenueCat Web Payments**: Use [RevenueCat](https://www.revenuecat.com/)
 - **Web-Based Payments**: Use [Stripe](https://stripe.com/)
 - **Hybrid Apps**: If your app supports both native mobile purchases AND web payments, set up both integrations
 
@@ -145,7 +145,7 @@ Next, you must setup a webhook to allow us to communicate directly with RevenueC
    - Copy this value
    - Paste it as the Authorization header value in your RevenueCat webhook configuration
 
-### Web-Based Payments: Stripe Integration
+## Web-Based Payments: Stripe Integration
 
 For web-based subscriptions and payments using Stripe, you'll need to connect your Stripe account and pass the Insert Affiliate identifier and company ID to Stripe's metadata during checkout.
 
@@ -234,9 +234,9 @@ app.post('/create-checkout-session', async (req, res) => {
 
 Both fields are required for proper affiliate attribution and commission tracking. Once you've connected your Stripe account via Stripe Connect (Step 1), Insert Affiliate will automatically receive all Stripe events and read these metadata fields to credit affiliates.
 
-### Stripe with RevenueCat
+### Stripe Billing with RevenueCat
 
-If you're using RevenueCat's web payment integration with Stripe Billing, you can track affiliate conversions through Insert Affiliate while using RevenueCat for subscription management.
+If you're using RevenueCat's [Stripe Billing](https://www.revenuecat.com/docs/web/integrations/stripe), you can track affiliate conversions through Insert Affiliate while using RevenueCat for subscription management.
 
 **Prerequisites:**
 - You must host your own web checkout page where Stripe Checkout is embedded (Insert Affiliate SDK needs to run on your page)
@@ -251,147 +251,191 @@ Simply follow the same **[Stripe Integration steps above](#web-based-payments-st
 
 That's it! Since you've connected your Stripe account via Stripe Connect, Insert Affiliate will automatically receive all Stripe events. RevenueCat handles subscription management, while Insert Affiliate handles affiliate attribution through the Stripe metadata.
 
-#### Configuring Branch.io Links for Stripe Payments
+### RevenueCat Web Billing Integration
 
-If you're using Branch.io deep links to drive users to your Stripe payment forms, you need to configure the web redirect URL to include the affiliate's short code. This ensures proper affiliate tracking when users land on your payment page.
+If you're using [RevenueCat's Web SDK with Web Billing](https://www.revenuecat.com/docs/web/web-billing/overview), you can track affiliate conversions by passing UTM parameters as purchase metadata.
 
-**Creating a Branch.io Quick Link for Stripe Checkout:**
+**Prerequisites:**
+- RevenueCat Web SDK installed and configured
+- RevenueCat Web Billing set up with Stripe
+- Insert Affiliate SDK initialized on your page
+- Connecting your Stripe account via Stripe Connect in the Insert Affiliate dashboard as described [above](#web-based-payments-stripe-integration)
+
+**Integration Steps:**
+
+1. **Install and Initialize Both SDKs**
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+import { Purchases } from '@revenuecat/purchases-js';
+
+// Initialize Insert Affiliate SDK
+await InsertAffiliate.initialize('your_company_code');
+
+// Initialize RevenueCat Web SDK
+const purchases = Purchases.configure('your_revenuecat_web_api_key');
+```
+
+2. **Retrieve Affiliate Information and Pass as Metadata During Purchase**
+
+Before making a purchase, retrieve the current affiliate identifier and company ID from the Insert Affiliate SDK, then pass them as UTM parameters in the RevenueCat purchase metadata:
+
+```javascript
+// Get the current affiliate identifier and company ID
+// Use ignoreTimeout: true to get the identifier even if attribution window expired
+const affiliateId = await InsertAffiliate.returnInsertAffiliateIdentifier(true);
+const companyId = await InsertAffiliate.returnCompanyId();
+
+console.log('Affiliate ID:', affiliateId || 'none');
+console.log('Company ID:', companyId || 'none');
+
+// Prepare metadata with UTM parameters for RevenueCat Web Billing
+const metadata: Record<string, string> = {};
+
+if (affiliateId && affiliateId !== 'none') {
+  metadata.utm_source = 'insertAffiliate';
+  metadata.utm_medium = companyId || 'none';
+  metadata.utm_campaign = affiliateId;
+}
+
+console.log('Purchase metadata:', JSON.stringify(metadata, null, 2));
+
+// Get offerings and select a package
+const offerings = await purchases.getOfferings();
+const selectedPackage = offerings.current?.availablePackages[0];
+
+if (!selectedPackage) {
+  console.error('No packages available');
+  return;
+}
+
+// Make the purchase with metadata
+const { customerInfo } = await purchases.purchase({
+  rcPackage: selectedPackage,
+  metadata: metadata,
+});
+
+console.log('Purchase successful!');
+console.log('Active entitlements:', Object.keys(customerInfo.entitlements.active));
+```
+
+**Important Notes:**
+- Always call `returnInsertAffiliateIdentifier()` and `returnCompanyId()` **before** initiating the purchase
+- Only include UTM parameters in metadata if an affiliate identifier exists
+- The metadata will be sent with the purchase and available in RevenueCat webhook events
+
+
+**UTM Parameter Mapping:**
+- `utm_source`: Always set to `'insertAffiliate'` to identify Insert Affiliate conversions
+- `utm_medium`: Your Insert Affiliate company ID
+- `utm_campaign`: The affiliate's identifier
+
+## RevenueCat Web Purchase Links
+
+If you are using [**RevenueCat Web Purchase Links**](https://www.revenuecat.com/docs/web/web-billing/web-purchase-links) for online campaigns (such as email marketing, social media, or affiliate promotions), you must append the following UTM parameters to ensure proper affiliate tracking:
+
+- **utm_source**
+- **utm_medium**
+- **utm_campaign**
+
+These parameters allow Insert Affiliate to track and attribute web-based purchases correctly.
+
+### Example
+
+If your RevenueCat Web Purchase Link is:
+
+```text
+https://pay.rev.cat/sandbox/viqxbcoudyfaeaae/
+```
+
+You should append:
+```text
+?utm_source=insertAffiliate&utm_medium={insertAffiliateCompanyId}&utm_campaign={insertAffiliateUtmCampaign}
+```
+
+#### Full Example With Parameters
+```text
+https://pay.rev.cat/sandbox/viqxbcoudyfaeaxa/?utm_source=insertAffiliate&utm_medium=12345&utm_campaign=AFF123
+```
+
+Where:
+- utm_source=insertAffiliate
+- utm_medium={insertAffiliateCompanyId} → your unique Insert Affiliate company ID
+- utm_campaign={insertAffiliateShortCode} → the affiliate’s short code
+
+Once the user opens this URL, the Insert Affiliate SDK automatically processes the UTM parameters and attributes the resulting purchase to the correct affiliate.
+
+## Configuring Deep Links for Web-Based Payments
+Use this section to configure Branch.io, AppsFlyer, or Insert Links so that your deep links correctly pass the insertAffiliate parameter to your web checkout.
+
+### Branch.io – Web Redirect Setup
+
+Use these steps if you're using [Branch.io](https://docs.insertaffiliate.com/branch) Quick Links to send users to your web-hosted payment page.
+
+### Creating a Branch.io Quick Link for Stripe Checkout:
 
 1. **Create a new Quick Link** in your Branch.io dashboard
-2. **Navigate to the "Redirects" page** in the link configuration
+2. Go to the **Redirects** section.
 3. **Select "Web URL"** as the redirect destination
 4. **Configure the URL** to point to your web app hosting the Stripe payment form:
    - Enter your web app's URL
    - Append the parameter: `?insertAffiliate={affiliateShortCode}`
    - Replace `{affiliateShortCode}` with the actual [short code](https://docs.insertaffiliate.com/short-codes) of the affiliate you're creating the link for
 
-**Example Web URL:**
+**Example:**
 ```
 https://yourwebsite.com?insertAffiliate=ABC123
 ```
 
-Where `ABC123` is the specific affiliate's short code. When users click this Branch.io link and land on your website, the Insert Affiliate SDK will automatically detect and process the `insertAffiliate` parameter, ensuring the subsequent Stripe payment is properly attributed to the affiliate.
+Once the user arrives on your site, the Insert Affiliate SDK automatically detects insertAffiliate and attributes the payment.
 
-Learn more about short codes in our [Short Codes documentation](https://docs.insertaffiliate.com/short-codes).
+For more details, see the [Short Codes documentation](https://docs.insertaffiliate.com/short-codes).
 
-#### Configuring AppsFlyer OneLinks for Stripe Payments
+### AppsFlyer – Web Redirect Setup
 
-If you're using AppsFlyer OneLinks to drive users to your Stripe payment forms, you need to configure the desktop web redirect URL to include the affiliate's short code. This ensures proper affiliate tracking when users land on your payment page.
+Use these steps if you're using [AppsFlyer](https://docs.insertaffiliate.com/appsflyer) OneLinks to send users to your Stripe or RevenueCat web checkout flow.
 
-**Creating an AppsFlyer OneLink for Stripe Checkout:**
-
+### Creating an AppsFlyer OneLink for Stripe Checkout
 1. **Create a new OneLink** in your AppsFlyer dashboard
-2. **Navigate to the link configuration settings**
-3. **Under "When link is clicked on desktop web page"**, configure the redirect URL
-4. **Set the URL** to point to your web app hosting the Stripe payment form:
-   - Enter your web app's URL
-   - Append the parameter: `?insertAffiliate={affiliateShortCode}`
+2. Open the link configuration settings
+3. Under **"When link is clicked on desktop web page"**, set the redirect URL
+4. Enter your web app’s checkout URL.
+5. Append the parameter: `?insertAffiliate={affiliateShortCode}`
    - Replace `{affiliateShortCode}` with the actual [short code](https://docs.insertaffiliate.com/short-codes) of the affiliate you're creating the link for
 
-**Example Desktop Web URL:**
+**Example:**
 ```
 https://yourwebsite.com?insertAffiliate=ABC123
 ```
 
-Where `ABC123` is the specific affiliate's short code. When users click this AppsFlyer OneLink and land on your website, the Insert Affiliate SDK will automatically detect and process the `insertAffiliate` parameter, ensuring the subsequent Stripe payment is properly attributed to the affiliate.
+The Insert Affiliate SDK will automatically detect the parameter and attribute the resulting payment.
 
-Learn more about short codes in our [Short Codes documentation](https://docs.insertaffiliate.com/short-codes).
+For more details, see the [Short Codes documentation](https://docs.insertaffiliate.com/short-codes).
 
-#### Insert Links for Stripe Payments (Automatic)
+### Insert Links – Web Automatic Configuration
 
-If you're using **Insert Links** (Insert Affiliate's built-in deep linking solution) to drive users to your Stripe payment forms, **no additional configuration is needed!**
+If you're using [**Insert Links**](https://docs.insertaffiliate.com/insert-links) (Insert Affiliate’s built-in deep linking solution), you don’t need to configure anything for web payments.
 
-Insert Links automatically includes the `insertAffiliate` parameter in web redirect URLs. When users click an Insert Links affiliate link and land on your website, the Insert Affiliate SDK will automatically:
+Insert Links automatically:
+1. Adds the `insertAffiliate` parameter
+2. Detects and processes attribution in your web app
+3. Tracks the payment to the correct affiliate
 
-1. **Detect** the `insertAffiliate` parameter in the URL
-2. **Process** the affiliate attribution
-3. **Track** the subsequent Stripe payment to the correct affiliate
+No extra setup, no redirects to configure — just initialise the SDK and you're done.
 
-**No manual setup required** - just initialize the SDK and it handles everything automatically.
+Learn more in our[Insert Links documentation](https://docs.insertaffiliate.com/insert-links).
 
-Learn more about Insert Links in our [Insert Links documentation](https://docs.insertaffiliate.com/insert-links).
+## Using the Callback for Automatic Integration
 
-
-## Deep Link Setup [Required]
-
-### Web-Based Affiliate Tracking
-
-For web applications, the SDK automatically detects affiliate identifiers from URL parameters. When users visit your website through an affiliate link, the SDK will capture and process the affiliate information.
-
-#### Automatic URL Parameter Detection
-
-The SDK automatically checks for an `insertAffiliate` URL parameter during initialization. If found, it will automatically call `setShortCode()` to process the affiliate attribution.
-
-**Example URL:**
-```
-https://yourwebsite.com?insertAffiliate=ABC123
-```
-
-When a user visits this URL, the SDK will automatically:
-1. Detect the `insertAffiliate=ABC123` parameter
-2. Call `setShortCode('ABC123')`
-3. Store the affiliate attribution
-4. Trigger any registered callbacks
-
-**No additional code required!** Simply initialize the SDK and it will handle URL parameters automatically.
-
-### Deep Linking Platforms (Branch.io / AppsFlyer / Insert Links)
-
-If you're using a deep linking platform for your mobile apps, the SDK can automatically capture affiliate attribution when users land on your website.
-
-#### Insert Links (Automatic)
-
-**Insert Links** automatically includes the `insertAffiliate` parameter in web redirect URLs - no configuration needed! When users click an Insert Links affiliate link and land on your website, the SDK will automatically capture the attribution.
-
-#### Branch.io & AppsFlyer (Manual Configuration Required)
-
-For **Branch.io** and **AppsFlyer**, you need to manually configure the **web fallback URL** to include the `insertAffiliate` parameter:
-
-**Setup Steps:**
-
-1. **Create your deep link** in Branch.io or AppsFlyer as normal
-2. **Configure the web fallback/redirect URL** to include the affiliate's short code as a URL parameter:
-   - **Branch.io**: Set the web URL fallback to: `https://yourwebsite.com?insertAffiliate=AFFILIATE_SHORT_CODE`
-   - **AppsFlyer**: Set the web destination to: `https://yourwebsite.com?insertAffiliate=AFFILIATE_SHORT_CODE`
-3. **Initialize the SDK** in your web app - it will automatically detect and process the parameter
-
-#### Example Configuration (Branch.io & AppsFlyer):
-
-**Branch.io Link Configuration:**
-- iOS URL: `yourapp://` (your app's deep link)
-- Android URL: `yourapp://` (your app's deep link)
-- **Web URL**: `https://yourwebsite.com?insertAffiliate=ABC123`
-
-**AppsFlyer OneLink Configuration:**
-- Mobile Destination: Your app (via store or deep link)
-- **Web Destination**: `https://yourwebsite.com?insertAffiliate=ABC123`
-
-#### How It Works:
-
-This approach ensures that:
-- **Mobile users** are directed to your app via deep linking (handled by your deep linking platform)
-- **Web users** (or mobile users without the app installed) are directed to your website with the affiliate identifier
-- The SDK **automatically captures** the affiliate attribution on the web
-- Works for **any web application** that accepts payments (not just Capacitor apps)
-
-### Manual Deep Link Handling (Advanced)
-
-If you need to manually handle deep links (for hybrid apps using Capacitor), you can still use the traditional approach:
-
-```javascript
-InsertAffiliate.setInsertAffiliateIdentifier(data["~referring_link"]);
-```
-
-### Using the Callback for Automatic Integration
-
-The SDK provides a callback mechanism that triggers whenever the affiliate identifier changes. This is perfect for automatically tracking and storing the affiliate identifier when a user clicks an affiliate link.
+The SDK provides a callback that fires whenever the affiliate identifier changes.
+This makes it easy to automatically update your UI, analytics, or checkout flow.
 
 #### Example: Storing Affiliate Identifier for Checkout
 
 ```javascript
 import { InsertAffiliate } from 'insert-affiliate-js-sdk';
 
-// Set up the callback to store the affiliate identifier for later use
+// Track the current affiliate identifier
 let currentAffiliateId = null;
 
 InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
@@ -417,44 +461,43 @@ const response = await fetch('https://your-backend.com/create-checkout-session',
 });
 ```
 
-#### Example: Updating UI When Affiliate Link is Clicked
+#### Example: Updating the UI When an Affiliate Link Is Clicked
 
 ```javascript
 import { InsertAffiliate } from 'insert-affiliate-js-sdk';
 
-// Set up the callback to update UI when an affiliate link is detected
+// Update the UI when the affiliate identifier changes
 InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
   if (identifier) {
     console.log('Affiliate identifier changed:', identifier);
 
-    // Show a banner or notification to the user
     const banner = document.getElementById('affiliate-banner');
     if (banner) {
       banner.textContent = 'You used a special affiliate link!';
       banner.style.display = 'block';
     }
 
-    // Track the affiliate click event
     analytics.track('affiliate_link_clicked', { identifier });
   }
 });
 ```
 
 **Benefits of using the callback:**
-- Automatically captures affiliate identifiers when users click links
-- No need to manually check for identifier updates
+- Automatically captures affiliate identifiers
+- No need for manual checks
 - Ensures attribution is always up-to-date
-- Simplifies integration code
-- Can trigger UI updates or analytics events
+- Perfect for handling dynamic user flows
+- Enables custom UI updates and analytics events
 
 **To clear the callback:**
 ```javascript
 InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 ```
 
-### Capacitor/Hybrid App Deep Link Handling
+## Capacitor/Hybrid App Deep Link Handling
 
-For Capacitor or hybrid apps that need to handle Branch.io deep links within the app (not just web URLs), you can manually process deep link data:
+If your app uses Branch.io via Capacitor, you may want to manually capture the referring link.
+Here’s an example using the Branch.io Capacitor Plugin:
 
 #### Example with Branch.io Capacitor Plugin
 
@@ -496,7 +539,7 @@ async function setUpBranchListener() {
 }
 ```
 
-**Note:** For most web applications, the automatic URL parameter detection (described above) is the recommended approach.
+**Note:** For most web applications, the automatic URL detection method is recommended and requires no additional setup.
 
 ## Additional Features
 
