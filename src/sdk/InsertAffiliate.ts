@@ -326,25 +326,109 @@ export class InsertAffiliate {
     return companyCode;
   }
 
-  static async getOfferCode(): Promise<string | null> {
-    this.verboseLog('Getting offer code...');
+  /**
+   * Get the offer code for the current affiliate
+   * @param platformType Optional platform type: 'stripe' (default for web), 'ios', or 'android'
+   * @returns The offer code for the specified platform, or null if not found
+   */
+  static async getOfferCode(platformType: 'ios' | 'android' | 'stripe' = 'stripe'): Promise<string | null> {
+    this.verboseLog(`Getting offer code for platform: ${platformType}...`);
 
-    // Return cached offer code if available
-    if (this.offerCode) {
+    const storageKey = platformType === 'stripe' ? 'offerCode' : `offerCode_${platformType}`;
+
+    // Return cached offer code if available (only for default Stripe)
+    if (platformType === 'stripe' && this.offerCode) {
       this.verboseLog(`Returning cached offer code: ${this.offerCode}`);
       return this.offerCode;
     }
 
     // Try to get from storage
-    const storedOfferCode = await getValue('offerCode');
+    const storedOfferCode = await getValue(storageKey);
     if (storedOfferCode) {
       this.verboseLog(`Returning stored offer code: ${storedOfferCode}`);
-      this.offerCode = storedOfferCode;
+      if (platformType === 'stripe') {
+        this.offerCode = storedOfferCode;
+      }
       return storedOfferCode;
+    }
+
+    // If not in storage, try to fetch it
+    const shortCode = await getValue('referrerLink');
+    if (shortCode) {
+      this.verboseLog(`No stored offer code, fetching for short code: ${shortCode}`);
+      const fetchedCode = await this.fetchOfferCodeForPlatform(shortCode, platformType);
+      return fetchedCode;
     }
 
     this.verboseLog('No offer code found');
     return null;
+  }
+
+  /**
+   * Get the Stripe coupon/promo code for the current affiliate
+   * Convenience method that calls getOfferCode with platformType='stripe'
+   * @returns The Stripe coupon/promo code, or null if not found
+   */
+  static async getStripeCouponCode(): Promise<string | null> {
+    return this.getOfferCode('stripe');
+  }
+
+  /**
+   * Fetch offer code for a specific platform
+   * @param shortCode The affiliate short code
+   * @param platformType The platform type: 'ios', 'android', or 'stripe'
+   * @returns The offer code for the specified platform, or null if not found
+   */
+  private static async fetchOfferCodeForPlatform(shortCode: string, platformType: 'ios' | 'android' | 'stripe'): Promise<string | null> {
+    this.verboseLog(`Fetching offer code for platform: ${platformType}, short code: ${shortCode}`);
+
+    try {
+      const companyCode = this.companyCode || await getValue('companyCode');
+      if (!companyCode) {
+        this.verboseLog('Cannot fetch offer code: no company code available');
+        return null;
+      }
+
+      const encoded = encodeURIComponent(shortCode);
+      const url = `https://api.insertaffiliate.com/v1/affiliateReturnOfferCode/${companyCode}/${encoded}?platformType=${platformType}`;
+      this.verboseLog(`Making API call to: ${url}`);
+
+      const response = await fetch(url);
+      this.verboseLog(`API response status: ${response.status}`);
+
+      if (!response.ok) {
+        this.verboseLog(`Failed to fetch offer code, status: ${response.status}`);
+        return null;
+      }
+
+      const offerCode = (await response.text()).replace(/[^a-zA-Z0-9]/g, '');
+      this.verboseLog(`Received offer code: ${offerCode}`);
+
+      const errorCodes = [
+        'errorofferCodeNotFound',
+        'errorAffiliateoffercodenotfoundinanycompany',
+        'errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas',
+        'Routenotfound'
+      ];
+
+      if (errorCodes.includes(offerCode)) {
+        this.verboseLog('Offer code not found or invalid');
+        return null;
+      }
+
+      // Store offer code with platform-specific key
+      const storageKey = platformType === 'stripe' ? 'offerCode' : `offerCode_${platformType}`;
+      await saveValue(storageKey, offerCode);
+      if (platformType === 'stripe') {
+        this.offerCode = offerCode;
+      }
+      this.verboseLog(`Offer code stored successfully with key ${storageKey}: ${offerCode}`);
+
+      return offerCode;
+    } catch (error) {
+      this.verboseLog(`Error fetching offer code: ${error}`);
+      return null;
+    }
   }
 
   private static async fetchAndStoreOfferCode(shortCode: string): Promise<void> {
