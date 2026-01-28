@@ -132,6 +132,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (affiliateIdentifier) {
     await Purchases.setAttributes({ insert_affiliate: affiliateIdentifier });
+    await Purchases.syncAttributesAndOfferingsIfNeeded();
   }
 });
 ```
