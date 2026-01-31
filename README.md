@@ -147,11 +147,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   await Purchases.configure({ apiKey: 'YOUR_REVENUECAT_API_KEY' });
 
   // Set up callback for when affiliate identifier changes
+  // Note: Use preventAffiliateTransfer in initialize() to block affiliate changes in the SDK
   InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(async (identifier, offerCode) => {
     if (!identifier) return;
 
     // Ensure RevenueCat subscriber exists before setting attributes
-    await Purchases.getCustomerInfo();
+    const customerInfo = await Purchases.getCustomerInfo();
+
+    // OPTIONAL: Prevent attribution for existing subscribers
+    // Uncomment to ensure affiliates only earn from users they actually brought:
+    // const hasActiveEntitlement = Object.keys(customerInfo.entitlements.active).length > 0;
+    // if (hasActiveEntitlement) return; // User already subscribed, don't attribute
 
     // Get expiry timestamp for RevenueCat targeting
     const expiryTimestamp = await InsertAffiliate.getAffiliateExpiryTimestamp();
