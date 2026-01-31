@@ -102,7 +102,9 @@ await InsertAffiliate.initialize(
 - `companyCode` (required): Your Insert Affiliate company code
 - `verboseLogging` (optional): Enable detailed console logs for debugging
 - `affiliateAttributionActiveTime` (optional): Time in milliseconds before attribution expires (e.g., `86400000` for 24 hours)
-- `preventAffiliateTransfer` (optional): When `true`, prevents new affiliates from overwriting existing attribution
+- `preventAffiliateTransfer` (optional): When `true`, prevents a new affiliate link from overwriting an existing affiliate attribution (defaults to `false`)
+  - Use this to ensure the first affiliate who acquired the user always gets credit
+  - New affiliate links will be silently ignored if the user already has an affiliate
 
 **Verbose logging shows:**
 - Initialization process and company code validation
