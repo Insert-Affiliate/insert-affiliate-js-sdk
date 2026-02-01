@@ -462,6 +462,27 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 
 </details>
 
+### Prevent Affiliate Transfer
+
+By default, clicking a new affiliate link will overwrite any existing attribution. Enable `preventAffiliateTransfer` to lock the first affiliate:
+
+```javascript
+await InsertAffiliate.initialize(
+  "YOUR_COMPANY_CODE",
+  false,   // verboseLogging
+  604800,  // 7-day attribution timeout
+  true     // preventAffiliateTransfer - locks first affiliate
+);
+```
+
+**How it works:**
+- When enabled, once a user is attributed to an affiliate, that attribution is locked
+- New affiliate links will not overwrite the existing attribution
+- The callback still fires with the existing affiliate data (not the new one)
+- Useful for preventing "affiliate stealing" where users click competitor links
+
+Learn more: [Prevent Affiliate Transfer Documentation](https://docs.insertaffiliate.com/prevent-affiliate-transfer)
+
 ---
 
 ## 📖 API Reference
