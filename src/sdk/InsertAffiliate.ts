@@ -25,7 +25,7 @@ export interface AffiliateDetails {
   deeplinkUrl: string;
 }
 
-export type InsertAffiliateIdentifierChangeCallback = (identifier: string | null) => void;
+export type InsertAffiliateIdentifierChangeCallback = (identifier: string | null, offerCode: string | null) => void;
 
 export class InsertAffiliate {
   private static isInitialized: boolean = false;
@@ -33,6 +33,7 @@ export class InsertAffiliate {
   private static verboseLogging: boolean = false;
   private static insertAffiliateIdentifierChangeCallback: InsertAffiliateIdentifierChangeCallback | null = null;
   private static affiliateAttributionActiveTime: number | null = null; // in milliseconds
+  private static preventAffiliateTransfer: boolean = false;
   private static offerCode: string | null = null;
 
   private static verboseLog(message: string): void {
@@ -41,13 +42,20 @@ export class InsertAffiliate {
     }
   }
 
-  static async initialize(code: string | null, verboseLogging: boolean = false, affiliateAttributionActiveTime?: number): Promise<void> {
+  static async initialize(
+    code: string | null,
+    verboseLogging: boolean = false,
+    affiliateAttributionActiveTime?: number,
+    preventAffiliateTransfer: boolean = false
+  ): Promise<void> {
     this.verboseLogging = verboseLogging;
+    this.preventAffiliateTransfer = preventAffiliateTransfer;
 
     if (verboseLogging) {
       this.verboseLog('Starting SDK initialization...');
       this.verboseLog(`Company code provided: ${code ? 'Yes' : 'No'}`);
       this.verboseLog('Verbose logging enabled');
+      this.verboseLog(`Prevent affiliate transfer: ${preventAffiliateTransfer}`);
     }
 
     if (this.isInitialized) {
@@ -154,6 +162,13 @@ export class InsertAffiliate {
       return identifier;
     }
 
+    // Check if transfer is blocked
+    if (this.preventAffiliateTransfer && existingShortCode && existingShortCode !== shortCode) {
+      this.verboseLog(`Transfer blocked: existing affiliate "${existingShortCode}" protected from being replaced by "${shortCode}"`);
+      const identifier = `${existingShortCode}-${userId}`;
+      return identifier;
+    }
+
     this.verboseLog(`Saving short code to storage: ${shortCode}`);
     await saveValue('referrerLink', shortCode);
 
@@ -166,12 +181,12 @@ export class InsertAffiliate {
     this.verboseLog(`Returning identifier: ${identifier}`);
 
     // Auto-fetch and store offer code (use just the short code, not the full identifier)
-    await this.fetchAndStoreOfferCode(shortCode);
+    const offerCode = await this.fetchAndStoreOfferCode(shortCode);
 
     // Trigger callback if one is registered
     if (this.insertAffiliateIdentifierChangeCallback) {
-      this.verboseLog(`Triggering callback with identifier: ${identifier}`);
-      this.insertAffiliateIdentifierChangeCallback(identifier);
+      this.verboseLog(`Triggering callback with identifier: ${identifier}, offerCode: ${offerCode || 'none'}`);
+      this.insertAffiliateIdentifierChangeCallback(identifier, offerCode);
     }
 
     return identifier;
@@ -253,6 +268,39 @@ export class InsertAffiliate {
     const storedDate = await getValue('affiliateStoredDate');
     this.verboseLog(`Stored date: ${storedDate || 'none'}`);
     return storedDate;
+  }
+
+  /**
+   * Get the Unix timestamp (in milliseconds) when the affiliate attribution will expire
+   * @returns The expiry timestamp in milliseconds, or null if no attribution or no timeout configured
+   */
+  static async getAffiliateExpiryTimestamp(): Promise<number | null> {
+    this.verboseLog('Getting affiliate expiry timestamp...');
+
+    const storedDateStr = await getValue('affiliateStoredDate');
+    if (!storedDateStr) {
+      this.verboseLog('No stored date found, returning null');
+      return null;
+    }
+
+    // Get timeout value from storage or class property
+    let timeoutMs = this.affiliateAttributionActiveTime;
+    if (timeoutMs === null) {
+      const storedTimeout = await getValue('affiliateAttributionActiveTime');
+      timeoutMs = storedTimeout ? parseInt(storedTimeout, 10) : null;
+    }
+
+    // If no timeout is set, return null (attribution never expires)
+    if (timeoutMs === null) {
+      this.verboseLog('No attribution timeout configured, returning null');
+      return null;
+    }
+
+    const storedDate = new Date(storedDateStr);
+    const expiryTimestamp = storedDate.getTime() + timeoutMs;
+    this.verboseLog(`Expiry timestamp: ${expiryTimestamp} (stored: ${storedDateStr}, timeout: ${timeoutMs}ms)`);
+
+    return expiryTimestamp;
   }
 
   /**
@@ -431,7 +479,7 @@ export class InsertAffiliate {
     }
   }
 
-  private static async fetchAndStoreOfferCode(shortCode: string): Promise<void> {
+  private static async fetchAndStoreOfferCode(shortCode: string): Promise<string | null> {
     this.verboseLog(`Fetching offer code for short code: ${shortCode}`);
 
     try {
@@ -439,7 +487,7 @@ export class InsertAffiliate {
       const companyCode = this.companyCode || await getValue('companyCode');
       if (!companyCode) {
         this.verboseLog('Cannot fetch offer code: no company code available');
-        return;
+        return null;
       }
 
       // Use the more efficient endpoint with company code and just the short code
@@ -452,7 +500,7 @@ export class InsertAffiliate {
 
       if (!response.ok) {
         this.verboseLog(`Failed to fetch offer code, status: ${response.status}`);
-        return;
+        return null;
       }
 
       const offerCode = (await response.text()).replace(/[^a-zA-Z0-9]/g, '');
@@ -468,15 +516,17 @@ export class InsertAffiliate {
 
       if (errorCodes.includes(offerCode)) {
         this.verboseLog('Offer code not found or invalid');
-        return;
+        return null;
       }
 
       // Store offer code
       this.offerCode = offerCode;
       await saveValue('offerCode', offerCode);
       this.verboseLog(`Offer code stored successfully: ${offerCode}`);
+      return offerCode;
     } catch (error) {
       this.verboseLog(`Error fetching offer code: ${error}`);
+      return null;
     }
   }
 

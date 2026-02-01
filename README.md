@@ -89,9 +89,22 @@ await InsertAffiliate.initialize('YOUR_COMPANY_CODE');
 <summary><strong>Advanced Initialization Options</strong> (click to expand)</summary>
 
 ```javascript
-// Enable verbose logging for debugging
-await InsertAffiliate.initialize('YOUR_COMPANY_CODE', true);
+// Full initialization with all options
+await InsertAffiliate.initialize(
+  'YOUR_COMPANY_CODE',   // Company code (required)
+  true,                  // Enable verbose logging (optional, default: false)
+  86400000,              // Attribution timeout in milliseconds (optional, e.g., 24 hours)
+  true                   // Prevent affiliate transfer (optional, default: false)
+);
 ```
+
+**Parameters:**
+- `companyCode` (required): Your Insert Affiliate company code
+- `verboseLogging` (optional): Enable detailed console logs for debugging
+- `affiliateAttributionActiveTime` (optional): Time in milliseconds before attribution expires (e.g., `86400000` for 24 hours)
+- `preventAffiliateTransfer` (optional): When `true`, prevents a new affiliate link from overwriting an existing affiliate attribution (defaults to `false`)
+  - Use this to ensure the first affiliate who acquired the user always gets credit
+  - New affiliate links will be silently ignored if the user already has an affiliate
 
 **Verbose logging shows:**
 - Initialization process and company code validation
@@ -125,16 +138,55 @@ import { InsertAffiliate } from 'insert-affiliate-js-sdk';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await InsertAffiliate.initialize('YOUR_COMPANY_CODE');
+  await InsertAffiliate.initialize(
+    'YOUR_COMPANY_CODE',
+    false,    // verbose logging
+    86400000, // 24 hour attribution timeout (optional)
+    true      // prevent affiliate transfer (optional)
+  );
   await Purchases.configure({ apiKey: 'YOUR_REVENUECAT_API_KEY' });
 
-  const affiliateIdentifier = await InsertAffiliate.returnInsertAffiliateIdentifier();
+  // Set up callback for when affiliate identifier changes
+  // Note: Use preventAffiliateTransfer in initialize() to block affiliate changes in the SDK
+  InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(async (identifier, offerCode) => {
+    if (!identifier) return;
 
-  if (affiliateIdentifier) {
-    await Purchases.setAttributes({ insert_affiliate: affiliateIdentifier });
+    // Ensure RevenueCat subscriber exists before setting attributes
+    const customerInfo = await Purchases.getCustomerInfo();
+
+    // OPTIONAL: Prevent attribution for existing subscribers
+    // Uncomment to ensure affiliates only earn from users they actually brought:
+    // const hasActiveEntitlement = Object.keys(customerInfo.entitlements.active).length > 0;
+    // if (hasActiveEntitlement) return; // User already subscribed, don't attribute
+
+    // Get expiry timestamp for RevenueCat targeting
+    const expiryTimestamp = await InsertAffiliate.getAffiliateExpiryTimestamp();
+
+    // Set attributes for RevenueCat
+    const attributes = {
+      insert_affiliate: identifier,
+      insert_timedout: expiryTimestamp?.toString() || '',
+    };
+
+    // Add offer code for RevenueCat Targeting (if available)
+    if (offerCode) {
+      attributes.affiliateOfferCode = offerCode;
+    }
+
+    await Purchases.setAttributes(attributes);
     await Purchases.syncAttributesAndOfferingsIfNeeded();
-  }
+  });
 });
+```
+
+**Using RevenueCat Targeting (Recommended)**
+
+RevenueCat Targeting automatically shows different offerings based on the `affiliateOfferCode` attribute. Simply display `offerings.current`:
+
+```javascript
+const offerings = await Purchases.getOfferings();
+const currentOffering = offerings.current;
+// RevenueCat targeting automatically shows the correct offering based on affiliateOfferCode
 ```
 
 **Step 2: Webhook Setup**
@@ -387,21 +439,26 @@ Learn more: [Short Codes Documentation](https://docs.insertaffiliate.com/short-c
 Get notified when the affiliate identifier changes:
 
 ```javascript
-InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier) => {
+InsertAffiliate.setInsertAffiliateIdentifierChangeCallback((identifier, offerCode) => {
   if (identifier) {
     console.log('Affiliate changed:', identifier);
+    console.log('Offer code:', offerCode || 'none');
 
     // Update UI
     document.getElementById('affiliate-banner').style.display = 'block';
 
     // Track in analytics
-    analytics.track('affiliate_link_clicked', { identifier });
+    analytics.track('affiliate_link_clicked', { identifier, offerCode });
   }
 });
 
 // Clear callback when done
 InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 ```
+
+**Callback Parameters:**
+- `identifier` (string | null): The full affiliate identifier (shortCode-userId)
+- `offerCode` (string | null): The offer code associated with this affiliate (if any)
 
 </details>
 
@@ -413,7 +470,7 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 
 | Method | Description | Returns |
 |--------|-------------|---------|
-| `initialize(companyCode, verbose?)` | Initialize the SDK | `Promise<void>` |
+| `initialize(companyCode, verbose?, timeout?, preventTransfer?)` | Initialize the SDK | `Promise<void>` |
 | `returnInsertAffiliateIdentifier(ignoreTimeout?)` | Get current affiliate identifier | `Promise<string \| null>` |
 | `returnCompanyId()` | Get company ID | `Promise<string \| null>` |
 | `setInsertAffiliateIdentifier(link)` | Set affiliate from deep link | `Promise<string \| null>` |
@@ -421,6 +478,9 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 | `getAffiliateDetails(code)` | Get affiliate info without storing | `Promise<AffiliateDetails \| null>` |
 | `trackEvent(eventName)` | Track custom event | `Promise<void>` |
 | `getOfferCode()` | Get offer code modifier | `Promise<string \| null>` |
+| `getAffiliateExpiryTimestamp()` | Get Unix timestamp (ms) when attribution expires | `Promise<number \| null>` |
+| `getAffiliateStoredDate()` | Get ISO date string when affiliate was stored | `Promise<string \| null>` |
+| `isAffiliateAttributionValid()` | Check if attribution is still valid | `Promise<boolean>` |
 | `setInsertAffiliateIdentifierChangeCallback(fn)` | Set change callback | `void` |
 
 <details>
