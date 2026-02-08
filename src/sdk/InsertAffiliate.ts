@@ -210,7 +210,7 @@ export class InsertAffiliate {
     }
 
     // Validate that the short code exists in the system
-    const affiliateDetails = await this.getAffiliateDetails(shortCode);
+    const affiliateDetails = await this.getAffiliateDetails(shortCode, { trackUsage: true });
     if (!affiliateDetails) {
       this.verboseLog(`Short code '${shortCode}' does not exist or validation failed`);
       console.error(`[Insert Affiliate] Error: Short code '${shortCode}' does not exist or validation failed.`);
@@ -309,7 +309,7 @@ export class InsertAffiliate {
    * @param affiliateCode The short code or deep link to look up
    * @returns AffiliateDetails if found, null otherwise
    */
-  static async getAffiliateDetails(affiliateCode: string): Promise<AffiliateDetails | null> {
+  static async getAffiliateDetails(affiliateCode: string, options?: { trackUsage?: boolean }): Promise<AffiliateDetails | null> {
     this.verboseLog(`Getting affiliate details for: ${affiliateCode}`);
 
     const companyCode = this.companyCode || await getValue('companyCode');
@@ -324,10 +324,14 @@ export class InsertAffiliate {
 
     try {
       const url = 'https://api.insertaffiliate.com/V1/checkAffiliateExists';
-      const payload = {
+      const payload: Record<string, any> = {
         companyId: companyCode,
         affiliateCode: cleanCode,
       };
+
+      if (options?.trackUsage) {
+        payload.trackUsage = true;
+      }
 
       this.verboseLog(`Making API call to: ${url}`);
       this.verboseLog(`Payload: ${JSON.stringify(payload)}`);
