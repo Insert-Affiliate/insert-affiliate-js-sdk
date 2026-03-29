@@ -453,20 +453,22 @@ export class InsertAffiliate {
         return null;
       }
 
-      const offerCode = (await response.text()).replace(/[^a-zA-Z0-9]/g, '');
-      this.verboseLog(`Received offer code: ${offerCode}`);
+      const rawOfferCode = await response.text();
 
-      const errorCodes = [
-        'errorofferCodeNotFound',
-        'errorAffiliateoffercodenotfoundinanycompany',
-        'errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas',
-        'Routenotfound'
-      ];
-
-      if (errorCodes.includes(offerCode)) {
+      // Check for specific error strings from API before cleaning
+      if (
+        rawOfferCode.includes('errorofferCodeNotFound') ||
+        rawOfferCode.includes('errorAffiliateoffercodenotfoundinanycompany') ||
+        rawOfferCode.includes('errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas') ||
+        rawOfferCode.includes('Routenotfound')
+      ) {
         this.verboseLog('Offer code not found or invalid');
         return null;
       }
+
+      // Remove special characters, keep only alphanumeric, underscores, and dashes
+      const offerCode = rawOfferCode.replace(/[^a-zA-Z0-9_-]/g, '');
+      this.verboseLog(`Received offer code: ${offerCode}`);
 
       // Store offer code with platform-specific key
       const storageKey = platformType === 'stripe' ? 'offerCode' : `offerCode_${platformType}`;
@@ -507,21 +509,22 @@ export class InsertAffiliate {
         return null;
       }
 
-      const offerCode = (await response.text()).replace(/[^a-zA-Z0-9]/g, '');
-      this.verboseLog(`Received offer code: ${offerCode}`);
+      const rawOfferCode = await response.text();
 
-      // Check for error codes
-      const errorCodes = [
-        'errorofferCodeNotFound',
-        'errorAffiliateoffercodenotfoundinanycompany',
-        'errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas',
-        'Routenotfound'
-      ];
-
-      if (errorCodes.includes(offerCode)) {
+      // Check for specific error strings from API before cleaning
+      if (
+        rawOfferCode.includes('errorofferCodeNotFound') ||
+        rawOfferCode.includes('errorAffiliateoffercodenotfoundinanycompany') ||
+        rawOfferCode.includes('errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas') ||
+        rawOfferCode.includes('Routenotfound')
+      ) {
         this.verboseLog('Offer code not found or invalid');
         return null;
       }
+
+      // Remove special characters, keep only alphanumeric, underscores, and dashes
+      const offerCode = rawOfferCode.replace(/[^a-zA-Z0-9_-]/g, '');
+      this.verboseLog(`Received offer code: ${offerCode}`);
 
       // Store offer code
       this.offerCode = offerCode;
@@ -739,20 +742,22 @@ export class InsertAffiliate {
       const res = await fetch(url);
       this.verboseLog(`API response status: ${res.status}`);
 
-      const offerCode = (await res.text()).replace(/[^a-zA-Z0-9]/g, '');
-      this.verboseLog(`Received offer code: ${offerCode}`);
+      const rawOfferCode = await res.text();
 
-      const errorCodes = [
-        'errorofferCodeNotFound',
-        'errorAffiliateoffercodenotfoundinanycompany',
-        'errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas',
-        'Routenotfound'
-      ];
-
-      if (errorCodes.includes(offerCode)) {
+      // Check for specific error strings from API before cleaning
+      if (
+        rawOfferCode.includes('errorofferCodeNotFound') ||
+        rawOfferCode.includes('errorAffiliateoffercodenotfoundinanycompany') ||
+        rawOfferCode.includes('errorAffiliateoffercodenotfoundinanycompanyAffiliatelinkwas') ||
+        rawOfferCode.includes('Routenotfound')
+      ) {
         this.verboseLog('Offer code not found or invalid');
         return;
       }
+
+      // Remove special characters, keep only alphanumeric, underscores, and dashes
+      const offerCode = rawOfferCode.replace(/[^a-zA-Z0-9_-]/g, '');
+      this.verboseLog(`Received offer code: ${offerCode}`);
 
       const redeemUrl = `https://apps.apple.com/redeem?ctx=offercodes&id=${offerCodeUrlId}&code=${offerCode}`;
       this.verboseLog(`Opening redeem URL: ${redeemUrl}`);
