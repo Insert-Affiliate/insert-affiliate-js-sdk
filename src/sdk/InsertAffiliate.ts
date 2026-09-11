@@ -1,6 +1,6 @@
 // src/sdk/InsertAffiliate.ts
 import { getValue, saveValue } from '../utils/asyncStorage';
-import { generateUUID, generateShortDeviceID } from '../utils/helpers';
+import { generateShortDeviceID, generateUUID } from '../utils/helpers';
 
 interface IapticAndroidReceipt {
   orderId: string;
@@ -23,6 +23,18 @@ export interface AffiliateDetails {
   affiliateName: string;
   affiliateShortCode: string;
   deeplinkUrl: string;
+}
+
+// 'not_found' means the backend confirmed no affiliate matches the code. 'lookup_failed'
+// means the backend couldn't be reached or errored (outage, timeout, rate limit) — the
+// code itself may still be valid. Callers that need to distinguish "definitely invalid"
+// from "couldn't check" (e.g. to retry instead of silently dropping attribution) should
+// use getAffiliateLookupStatus instead of getAffiliateDetails.
+export type AffiliateLookupStatus = 'found' | 'not_found' | 'lookup_failed';
+
+export interface AffiliateLookupResult {
+  status: AffiliateLookupStatus;
+  details: AffiliateDetails | null;
 }
 
 export type InsertAffiliateIdentifierChangeCallback = (identifier: string | null, offerCode: string | null) => void;
@@ -196,9 +208,12 @@ export class InsertAffiliate {
    * Validates and sets a short code for affiliate tracking
    * Validates the short code against the API before storing
    * @param shortCode The short code to validate and set
+   * @param options.onLookupFailed called (instead of just returning false) when validation
+   *   couldn't be completed — a backend outage/timeout/rate limit, not a bad code. Use this
+   *   to keep the customer in a retry dialog instead of silently proceeding unattributed.
    * @returns true if the code exists and was successfully validated and stored, false otherwise
    */
-  static async setShortCode(shortCode: string): Promise<boolean> {
+  static async setShortCode(shortCode: string, options?: { onLookupFailed?: () => void }): Promise<boolean> {
     this.verboseLog(`Setting short code. Input: ${shortCode}`);
 
     const valid = /^[a-zA-Z0-9]{3,25}$/.test(shortCode);
@@ -210,12 +225,16 @@ export class InsertAffiliate {
     }
 
     // Validate that the short code exists in the system
-    const affiliateDetails = await this.getAffiliateDetails(shortCode, { trackUsage: true });
-    if (!affiliateDetails) {
-      this.verboseLog(`Short code '${shortCode}' does not exist or validation failed`);
+    const lookup = await this.getAffiliateLookupResult(shortCode, { trackUsage: true });
+    if (lookup.status !== 'found' || !lookup.details) {
+      this.verboseLog(`Short code '${shortCode}' does not exist or validation failed (status: ${lookup.status})`);
       console.error(`[Insert Affiliate] Error: Short code '${shortCode}' does not exist or validation failed.`);
+      if (lookup.status === 'lookup_failed') {
+        options?.onLookupFailed?.();
+      }
       return false;
     }
+    const affiliateDetails = lookup.details;
 
     this.verboseLog(`Short code validated successfully for affiliate: ${affiliateDetails.affiliateName}`);
     console.log(`[Insert Affiliate] Short code validated successfully for affiliate: ${affiliateDetails.affiliateName}`);
@@ -304,18 +323,20 @@ export class InsertAffiliate {
   }
 
   /**
-   * Retrieve detailed information about an affiliate by their short code or deep link
-   * This method queries the API and does not store or set the affiliate identifier
+   * Retrieve detailed information about an affiliate by their short code or deep link,
+   * distinguishing "no affiliate matches this code" from "couldn't check" (backend
+   * outage, timeout, rate limit). This method queries the API and does not store or set
+   * the affiliate identifier.
    * @param affiliateCode The short code or deep link to look up
-   * @returns AffiliateDetails if found, null otherwise
+   * @returns an AffiliateLookupResult with a status of 'found', 'not_found', or 'lookup_failed'
    */
-  static async getAffiliateDetails(affiliateCode: string, options?: { trackUsage?: boolean }): Promise<AffiliateDetails | null> {
+  static async getAffiliateLookupResult(affiliateCode: string, options?: { trackUsage?: boolean }): Promise<AffiliateLookupResult> {
     this.verboseLog(`Getting affiliate details for: ${affiliateCode}`);
 
     const companyCode = this.companyCode || await getValue('companyCode');
     if (!companyCode) {
       this.verboseLog('Cannot get affiliate details: no company code available');
-      return null;
+      return { status: 'lookup_failed', details: null };
     }
 
     // Strip UUID from code if present (e.g., "ABC123-uuid" becomes "ABC123")
@@ -346,7 +367,7 @@ export class InsertAffiliate {
 
       if (!response.ok) {
         this.verboseLog(`Failed to get affiliate details, status: ${response.status}`);
-        return null;
+        return { status: 'lookup_failed', details: null };
       }
 
       const data = await response.json();
@@ -360,15 +381,28 @@ export class InsertAffiliate {
         };
 
         this.verboseLog(`Successfully retrieved affiliate details for: ${details.affiliateName}`);
-        return details;
+        return { status: 'found', details };
       }
 
       this.verboseLog('Affiliate does not exist');
-      return null;
+      return { status: 'not_found', details: null };
     } catch (error) {
       this.verboseLog(`Error fetching affiliate details: ${error}`);
-      return null;
+      return { status: 'lookup_failed', details: null };
     }
+  }
+
+  /**
+   * Retrieve detailed information about an affiliate by their short code or deep link.
+   * Kept for backward compatibility: collapses 'not_found' and 'lookup_failed' into the
+   * same null result, exactly as before. Use getAffiliateLookupResult if you need to tell
+   * an invalid code apart from a backend outage.
+   * @param affiliateCode The short code or deep link to look up
+   * @returns AffiliateDetails if found, null otherwise
+   */
+  static async getAffiliateDetails(affiliateCode: string, options?: { trackUsage?: boolean }): Promise<AffiliateDetails | null> {
+    const result = await this.getAffiliateLookupResult(affiliateCode, options);
+    return result.details;
   }
 
   static async returnCompanyId(): Promise<string | null> {
