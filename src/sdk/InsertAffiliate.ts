@@ -25,12 +25,9 @@ export interface AffiliateDetails {
   deeplinkUrl: string;
 }
 
-// 'not_found' means the backend confirmed no affiliate matches the code. 'lookup_failed'
-// means the backend couldn't be reached or errored (outage, timeout, rate limit) — the
-// code itself may still be valid. Callers that need to distinguish "definitely invalid"
-// from "couldn't check" (e.g. to retry instead of silently dropping attribution) should
-// use getAffiliateLookupStatus instead of getAffiliateDetails.
-export type AffiliateLookupStatus = 'found' | 'not_found' | 'lookup_failed';
+// 'lookup_failed' (outage, timeout) may be worth retrying. 'not_configured' (no company
+// code set) never will be — it's always a bug in the calling app, not the code or backend.
+export type AffiliateLookupStatus = 'found' | 'not_found' | 'lookup_failed' | 'not_configured';
 
 export interface AffiliateLookupResult {
   status: AffiliateLookupStatus;
@@ -208,9 +205,8 @@ export class InsertAffiliate {
    * Validates and sets a short code for affiliate tracking
    * Validates the short code against the API before storing
    * @param shortCode The short code to validate and set
-   * @param options.onLookupFailed called (instead of just returning false) when validation
-   *   couldn't be completed — a backend outage/timeout/rate limit, not a bad code. Use this
-   *   to keep the customer in a retry dialog instead of silently proceeding unattributed.
+   * @param options.onLookupFailed called when the lookup itself couldn't be completed
+   *   (not just an invalid code) — use it to offer a retry instead of proceeding unattributed.
    * @returns true if the code exists and was successfully validated and stored, false otherwise
    */
   static async setShortCode(shortCode: string, options?: { onLookupFailed?: () => void }): Promise<boolean> {
@@ -328,7 +324,7 @@ export class InsertAffiliate {
    * outage, timeout, rate limit). This method queries the API and does not store or set
    * the affiliate identifier.
    * @param affiliateCode The short code or deep link to look up
-   * @returns an AffiliateLookupResult with a status of 'found', 'not_found', or 'lookup_failed'
+   * @returns an AffiliateLookupResult with a status of 'found', 'not_found', 'lookup_failed', or 'not_configured'
    */
   static async getAffiliateLookupResult(affiliateCode: string, options?: { trackUsage?: boolean }): Promise<AffiliateLookupResult> {
     this.verboseLog(`Getting affiliate details for: ${affiliateCode}`);
@@ -336,7 +332,7 @@ export class InsertAffiliate {
     const companyCode = this.companyCode || await getValue('companyCode');
     if (!companyCode) {
       this.verboseLog('Cannot get affiliate details: no company code available');
-      return { status: 'lookup_failed', details: null };
+      return { status: 'not_configured', details: null };
     }
 
     // Strip UUID from code if present (e.g., "ABC123-uuid" becomes "ABC123")
@@ -373,7 +369,13 @@ export class InsertAffiliate {
       const data = await response.json();
       this.verboseLog(`API response data: ${JSON.stringify(data)}`);
 
-      if (data.exists && data.affiliate) {
+      if (data.exists) {
+        if (!data.affiliate) {
+          // Malformed response, not a real not-found.
+          this.verboseLog('Affiliate exists but response is missing affiliate details');
+          return { status: 'lookup_failed', details: null };
+        }
+
         const details: AffiliateDetails = {
           affiliateName: data.affiliate.affiliateName,
           affiliateShortCode: data.affiliate.affiliateShortCode,
