@@ -45,7 +45,7 @@ const STYLE = `
 .ia-raf-dialog *{box-sizing:border-box}
 .ia-raf-title{margin:0 36px 8px 0;font-size:20px;font-weight:700;line-height:1.3}
 .ia-raf-reward{margin:0 0 16px;color:#444}
-.ia-raf-close{position:absolute;top:12px;right:12px;width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:#555;font-size:24px;line-height:1;cursor:pointer}
+.ia-raf-close{position:absolute;margin:0;top:19px;right:14px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;padding:0 0 2px;border:0;border-radius:50%;background:transparent;color:#555;font-size:26px;line-height:1;cursor:pointer}
 .ia-raf-close:hover{background:#f0f0f3}
 .ia-raf-label{display:block;margin:0 0 4px;font-size:13px;font-weight:600}
 .ia-raf-input{display:block;width:100%;margin:0 0 12px;padding:10px 12px;border:1px solid #c8c8cc;border-radius:calc(var(--ia-raf-radius) * .66);background:#fff;color:#1a1a1a;font:inherit}
@@ -60,7 +60,7 @@ const STYLE = `
 .ia-raf-row{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:10px 12px;border:1px dashed var(--ia-raf-primary);border-radius:calc(var(--ia-raf-radius) * .66)}
 .ia-raf-code{flex:1;min-width:0;font-size:20px;font-weight:700;letter-spacing:1px;word-break:break-all}
 .ia-raf-url{flex:1;min-width:0;font-size:13px;color:#444;word-break:break-all}
-.ia-raf-copy{flex:none;padding:6px 10px;border:1px solid var(--ia-raf-primary);border-radius:calc(var(--ia-raf-radius) * .5);background:transparent;color:var(--ia-raf-primary);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.ia-raf-copy{flex:none;margin:0;padding:6px 10px;border:1px solid var(--ia-raf-primary);border-radius:calc(var(--ia-raf-radius) * .5);background:transparent;color:var(--ia-raf-primary);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .ia-raf-stats{display:flex;gap:12px;margin:16px 0 8px}
 .ia-raf-stat{flex:1;padding:12px;border-radius:calc(var(--ia-raf-radius) * .66);background:#f4f4f7;text-align:center}
 .ia-raf-stat-value{display:block;font-size:20px;font-weight:700}
