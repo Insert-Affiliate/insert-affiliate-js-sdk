@@ -462,6 +462,84 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 
 </details>
 
+<details>
+<summary><h3>In-App Referrals (Refer a Friend)</h3></summary>
+
+Turn your own users into affiliates from inside your app, show them a ready-made "Refer a friend" screen, and read their referral stats so you can reward them. Referrers are normal affiliates: they get the same dashboard, referrals tab and commission as any other affiliate.
+
+Switch the program on in your Insert Affiliate dashboard first. The requests come from the browser, so your site's origin must be in your company's allowed origins.
+
+**Drop-in modal (quickest):**
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+document.getElementById('refer-button').addEventListener('click', () => {
+  const modal = InsertAffiliate.showReferAFriend({
+    email: currentUser.email, // prefills the form (usually your logged-in user)
+    name: currentUser.name,
+    onClose: () => console.log('Refer a friend closed'),
+  });
+
+  // modal.close() dismisses it from code
+});
+```
+
+The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards.
+
+| Option | Description |
+|--------|-------------|
+| `email`, `name` | Prefill the form |
+| `shareMessage` | Share message. May use `{link}` and `{code}` placeholders |
+| `primaryColor` | Overrides the dashboard colour (any CSS colour). Default `#6A0DAD` |
+| `headline`, `rewardText` | Override the dashboard copy. Default headline "Refer a friend" |
+| `fontFamily`, `cornerRadius` | Match your app's look |
+| `onClose` | Called once when the modal closes |
+
+Headline, reward text and colour set in the dashboard are used when you do not pass them, so wording changes need no release.
+
+**Build your own screen:**
+
+```javascript
+// 1. Make the user a referrer
+const result = await InsertAffiliate.createAffiliateForUser('jane@example.com', 'Jane');
+
+if (result.status === 'verificationRequired') {
+  // The email is already an affiliate: we emailed a 6-digit code
+  const code = prompt('Enter the code we emailed you');
+  const verified = await InsertAffiliate.verifyAffiliateCode('jane@example.com', code);
+  if (verified.status === 'error') alert(verified.errorMessage);
+} else if (result.status === 'error') {
+  console.log(result.errorCode, result.errorMessage); // e.g. PROGRAM_DISABLED
+}
+
+// 2. Read their stats
+const details = await InsertAffiliate.getMyAffiliateDetails();
+if (details) {
+  console.log(details.affiliateShortCode, details.deeplinkurl);
+  console.log(`${details.referralCount} referrals, ${details.totalEarned} ${details.currency} earned`);
+}
+
+// 3. Share (call from a click handler)
+await InsertAffiliate.shareReferralLink(); // 'shared' | 'copied' | 'cancelled' | 'failed'
+
+// On logout
+await InsertAffiliate.signOutAffiliate();
+```
+
+- `createAffiliateForUser` creates a new affiliate and connects this browser straight away. If the email is already an affiliate it never connects on the email alone: it emails a 6-digit code and returns `verificationRequired`.
+- Connecting stores a private token in `localStorage`, one per company. `isUserAnAffiliate()` checks for it without a network call. `signOutAffiliate()` removes it; the affiliate account is kept.
+- If the token stops working (for example the affiliate was removed), `getMyAffiliateDetails()` clears it and returns `null`.
+- `referralCount` is the count for the trigger you chose in the dashboard (install, event or purchase). It only ever goes up.
+- Sharing uses the browser share sheet (`navigator.share`), or copies the text to the clipboard where that is not available. Default text: `Try {companyName}: {link}`, or `Use my code {code} in {companyName}` when you use Short Code Only.
+- Error codes: `INVALID_EMAIL`, `INVALID_CODE`, `PROGRAM_DISABLED`, `AFFILIATE_LIMIT_REACHED`, `TOO_MANY_CODES`, `RATE_LIMITED`, `COMPANY_NOT_FOUND`, `NETWORK_ERROR`, `NOT_INITIALIZED`.
+
+**Rewarding referrers:** values read on the device are for display. A modified browser can show anything, so grant anything valuable (credits, premium time) from your server using the `referral.created` webhook or the Public API. The webhook includes a running `referral_count`, so rewarding up to that number is safe to repeat.
+
+**Store rules:** the SDK only uses the share sheet and never asks for contacts. Never lock features behind sharing, and never reward ratings or reviews.
+
+</details>
+
 ### Prevent Affiliate Transfer
 
 By default, clicking a new affiliate link will overwrite any existing attribution. Enable `preventAffiliateTransfer` to lock the first affiliate:
@@ -503,6 +581,19 @@ Learn more: [Prevent Affiliate Transfer Documentation](https://docs.insertaffili
 | `getAffiliateStoredDate()` | Get ISO date string when affiliate was stored | `Promise<string \| null>` |
 | `isAffiliateAttributionValid()` | Check if attribution is still valid | `Promise<boolean>` |
 | `setInsertAffiliateIdentifierChangeCallback(fn)` | Set change callback | `void` |
+
+### In-App Referral Methods
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `createAffiliateForUser(email, name)` | Make the app user a referrer, or email a code if they already are one | `Promise<AffiliateEnrolmentResult>` |
+| `verifyAffiliateCode(email, code, name?)` | Finish connecting with the emailed 6-digit code | `Promise<AffiliateEnrolmentResult>` |
+| `getMyAffiliateDetails()` | Connected referrer's details and stats | `Promise<MyAffiliateDetails \| null>` |
+| `isUserAnAffiliate()` | Whether a referrer is connected on this device (no network) | `Promise<boolean>` |
+| `signOutAffiliate()` | Disconnect the referrer from this device | `Promise<void>` |
+| `getReferralProgramConfig()` | Program on/off plus dashboard copy and colour | `Promise<ReferralProgramConfig \| null>` |
+| `shareReferralLink(message?)` | Share sheet, or copy to clipboard | `Promise<ReferralShareOutcome>` |
+| `showReferAFriend(options?)` | Show the drop-in modal | `ReferAFriendHandle` |
 
 <details>
 <summary><strong>Detailed Method Documentation</strong></summary>

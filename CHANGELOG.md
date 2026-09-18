@@ -5,6 +5,14 @@ All notable changes to the Insert Affiliate JavaScript SDK will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **In-app referrals** - Turn app users into affiliates and show them a "Refer a friend" screen
+  - `createAffiliateForUser()`, `verifyAffiliateCode()`, `getMyAffiliateDetails()`, `isUserAnAffiliate()`, `signOutAffiliate()`, `getReferralProgramConfig()`, `shareReferralLink()`
+  - `showReferAFriend()` drop-in web modal (no dependencies, accessible, themeable)
+  - Exported types: `AffiliateEnrolmentResult`, `MyAffiliateDetails`, `ReferralProgramConfig`, `ReferAFriendOptions`, `ReferAFriendHandle` and related
+
 ## [1.3.1] - 2026-03-29
 
 ### Fixed
