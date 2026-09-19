@@ -65,6 +65,10 @@ const STYLE = `
 .ia-raf-stat{flex:1;padding:12px;border-radius:calc(var(--ia-raf-radius) * .66);background:#f4f4f7;text-align:center}
 .ia-raf-stat-value{display:block;font-size:20px;font-weight:700}
 .ia-raf-stat-label{display:block;color:#666;font-size:12px}
+.ia-raf-premium{margin:8px 0;padding:10px 12px;border-radius:calc(var(--ia-raf-radius) * .66);background:#eef7ef;color:#1b5e20;font-size:14px;font-weight:600;text-align:center}
+.ia-raf-rewards-title{margin:16px 0 8px;font-size:15px;font-weight:700}
+.ia-raf-rewards{margin:0;padding:0;list-style:none}
+.ia-raf-reward-code{flex:1;min-width:0;font-size:15px;font-weight:600;letter-spacing:.5px;word-break:break-all}
 .ia-raf-status{min-height:20px;margin:8px 0 0;color:#2e7d32;font-size:13px;text-align:center}
 `;
 
@@ -105,6 +109,18 @@ function formatMoney(amount: number, currency: string): string {
 }
 
 const isHttpsUrl = (value: string): boolean => /^https:\/\//i.test(value);
+
+/** The localised date when `iso` is in the future, otherwise null. */
+export function futureDateLabel(iso: string | null, now: number = Date.now()): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime()) || date.getTime() <= now) return null;
+  try {
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch {
+    return date.toDateString();
+  }
+}
 
 /** Presents the modal. Only valid in a browser. */
 export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFriendDeps): ReferAFriendHandle {
@@ -413,6 +429,31 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
           el('span', { className: 'ia-raf-stat-label', text: 'Earned' }),
         ]),
       ]));
+      const premiumUntil = futureDateLabel(stats.premiumUntil);
+      if (premiumUntil) {
+        children.push(el('p', { className: 'ia-raf-premium', text: `Free premium until ${premiumUntil}` }));
+      }
+      // App Store offer codes. Shown on the web too: an iPhone user opens the link there anyway.
+      if (stats.rewardCodes.length) {
+        const rewardsTitleId = `${titleId}-rewards`;
+        children.push(
+          el('h3', { className: 'ia-raf-rewards-title', text: 'Your rewards', attrs: { id: rewardsTitleId } }),
+          el('ul', { className: 'ia-raf-rewards', attrs: { 'aria-labelledby': rewardsTitleId } }, stats.rewardCodes.map((reward) => {
+            const redeemUrl = reward.redeemUrl;
+            let redeem: HTMLButtonElement | null = null;
+            if (isHttpsUrl(redeemUrl)) {
+              redeem = button('Redeem', 'ia-raf-copy', () => {
+                window.open(redeemUrl, '_blank', 'noopener,noreferrer');
+              });
+              redeem.setAttribute('aria-label', `Redeem ${reward.code}`);
+            }
+            return el('li', { className: 'ia-raf-row' }, [
+              el('span', { className: 'ia-raf-reward-code', text: reward.code }),
+              redeem,
+            ]);
+          }))
+        );
+      }
       if (isHttpsUrl(stats.dashboardUrl)) {
         const dashboardUrl = stats.dashboardUrl;
         children.push(button('Open my dashboard', 'ia-raf-btn ia-raf-btn-secondary', () => {

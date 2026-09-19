@@ -26,6 +26,32 @@ export interface MyAffiliateDetails extends ReferrerAffiliate {
   totalUnpaid: number;
   currency: string;
   dashboardUrl: string;
+  /** How many referral rewards this user has been granted. */
+  rewardsGranted: number;
+  /** ISO date the user's free premium from referrals runs until, or null. */
+  premiumUntil: string | null;
+  /** App Store one-time offer codes granted as rewards, newest first. */
+  rewardCodes: ReferralRewardCode[];
+}
+
+/** An App Store one-time offer code granted as a referral reward. */
+export interface ReferralRewardCode {
+  code: string;
+  /** Opens the App Store redemption page with the code filled in. */
+  redeemUrl: string;
+  /** ISO date the code was granted. */
+  grantedAt: string;
+}
+
+/**
+ * The referrer's own accounts, so rewards can be granted and a referrer
+ * cannot count as their own referral. Supply whichever the app uses.
+ */
+export interface ReferrerAccountOptions {
+  /** The user's RevenueCat app user id or Adapty customer user id. */
+  appUserId?: string;
+  /** The user's own Google Play subscription purchase token. */
+  playPurchaseToken?: string;
 }
 
 /** Program on/off plus the drop-in UI copy and colour configured in the portal. */

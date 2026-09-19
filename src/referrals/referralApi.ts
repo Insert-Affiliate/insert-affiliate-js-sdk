@@ -5,6 +5,7 @@ import type {
   AffiliateEnrolmentResult,
   MyAffiliateDetails,
   ReferralProgramConfig,
+  ReferralRewardCode,
   ReferralShareOutcome,
   ReferralTrigger,
   ReferrerAffiliate,
@@ -44,6 +45,12 @@ export const parseReferrerAffiliate = (raw: unknown): ReferrerAffiliate => {
   };
 };
 
+const parseRewardCodes = (value: unknown): ReferralRewardCode[] =>
+  (Array.isArray(value) ? value : [])
+    .filter(isObject)
+    .map((item) => ({ code: str(item.code), redeemUrl: str(item.redeemUrl), grantedAt: str(item.grantedAt) }))
+    .filter((item) => item.code);
+
 export const parseMyAffiliateDetails = (raw: unknown): MyAffiliateDetails => {
   const data = isObject(raw) ? raw : {};
   return {
@@ -58,6 +65,9 @@ export const parseMyAffiliateDetails = (raw: unknown): MyAffiliateDetails => {
     totalUnpaid: num(data.totalUnpaid),
     currency: str(data.currency) || 'USD',
     dashboardUrl: str(data.dashboardUrl),
+    rewardsGranted: num(data.rewardsGranted),
+    premiumUntil: str(data.premiumUntil) || null,
+    rewardCodes: parseRewardCodes(data.rewardCodes),
   };
 };
 
@@ -160,6 +170,16 @@ const readJson = async (response: Response): Promise<unknown> => {
   }
 };
 
+/** Drops empty and missing values, so optional fields are only sent when set. */
+export const withoutEmpty = (payload: Record<string, string | null | undefined>): Record<string, string> => {
+  const out: Record<string, string> = {};
+  Object.keys(payload).forEach((key) => {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim()) out[key] = value.trim();
+  });
+  return out;
+};
+
 const networkError = (): AffiliateEnrolmentResult =>
   errorResult('NETWORK_ERROR', 'Could not reach Insert Affiliate. Check the connection and try again.');
 
@@ -185,7 +205,7 @@ export const fetchReferralProgramConfig = async (
 export const postEnrolment = async (
   path: 'enrol' | 'verify',
   companyId: string,
-  payload: Record<string, string>,
+  payload: Record<string, string | undefined>,
   log: ReferralLog
 ): Promise<AffiliateEnrolmentResult> => {
   const url = `${BASE_URL}/${path}`;
@@ -194,7 +214,7 @@ export const postEnrolment = async (
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId, platform: PLATFORM, ...payload }),
+      body: JSON.stringify({ companyId, platform: PLATFORM, ...withoutEmpty(payload) }),
     });
     log(`Referral ${path} response status: ${response.status}`);
 
@@ -243,6 +263,42 @@ export const fetchMyAffiliateDetails = async (
   } catch (error) {
     log(`Error fetching referral details: ${error}`);
     return { kind: 'failed' };
+  }
+};
+
+/**
+ * POST /me/identity with the device token: saves the referrer's own accounts
+ * (app user id, Play purchase token, device id). A 401 or 404 clears the
+ * token like fetchMyAffiliateDetails. True when the server saved them.
+ */
+export const postReferrerIdentity = async (
+  companyId: string,
+  token: string,
+  payload: Record<string, string | null | undefined>,
+  log: ReferralLog
+): Promise<boolean> => {
+  const url = `${BASE_URL}/me/identity`;
+  log(`Making API call to: ${url}`);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [TOKEN_HEADER]: token },
+      body: JSON.stringify(withoutEmpty(payload)),
+    });
+    log(`Referrer identity response status: ${response.status}`);
+
+    if (response.status === 401 || response.status === 404) {
+      clearReferrerToken(companyId);
+      log('Referrer token no longer valid; cleared');
+      return false;
+    }
+    if (!response.ok) return false;
+
+    const body = await readJson(response);
+    return isObject(body) && body.saved === true;
+  } catch (error) {
+    log(`Error saving referrer identity: ${error}`);
+    return false;
   }
 };
 

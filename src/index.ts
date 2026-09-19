@@ -7,7 +7,9 @@ export type {
   ReferAFriendOptions,
   ReferralErrorCode,
   ReferralProgramConfig,
+  ReferralRewardCode,
   ReferralShareOutcome,
   ReferralTrigger,
+  ReferrerAccountOptions,
   ReferrerAffiliate,
 } from './referrals/referralTypes';
