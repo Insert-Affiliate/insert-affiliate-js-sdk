@@ -204,7 +204,9 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
 
   function onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
+      // Handled here only, so the host page's own dialogs stay open.
       event.preventDefault();
+      event.stopPropagation();
       close();
       return;
     }
