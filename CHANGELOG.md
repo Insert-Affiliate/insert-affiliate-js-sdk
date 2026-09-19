@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `createAffiliateForUser()` and `verifyAffiliateCode()` take optional `{ appUserId, playPurchaseToken }` and send this browser's device id
   - `setReferrerAccount()` saves those accounts after joining, so waiting rewards are granted
   - `MyAffiliateDetails` adds `rewardsGranted`, `premiumUntil` and `rewardCodes`
+  - `showReferAFriend()` takes optional `appUserId` and `playPurchaseToken` and passes them on, so modal-only apps need no extra call
   - The modal shows "Free premium until {date}" and a "Your rewards" list with a Redeem button per App Store offer code
   - Exported types: `ReferrerAccountOptions`, `ReferralRewardCode`
 

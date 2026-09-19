@@ -494,6 +494,7 @@ The modal handles everything: the "Get my link" form, the 6-digit email code ste
 | `primaryColor` | Overrides the dashboard colour (any CSS colour). Default `#6A0DAD` |
 | `headline`, `rewardText` | Override the dashboard copy. Default headline "Refer a friend" |
 | `fontFamily`, `cornerRadius` | Match your app's look |
+| `appUserId`, `playPurchaseToken` | The user's own accounts, for automatic referrer rewards. Sent when the user joins, or saved once when the modal opens for a user who already joined |
 | `onClose` | Called once when the modal closes |
 
 Headline, reward text and colour set in the dashboard are used when you do not pass them, so wording changes need no release.

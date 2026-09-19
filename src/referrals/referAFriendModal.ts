@@ -19,6 +19,8 @@ export interface ReferAFriendDeps {
   loadDetails(): Promise<MyDetailsFetch>;
   enrol(email: string, name: string): Promise<AffiliateEnrolmentResult>;
   verify(email: string, code: string, name: string): Promise<AffiliateEnrolmentResult>;
+  /** Saves the referrer's own accounts for an already connected user. */
+  saveAccount(): Promise<boolean>;
 }
 
 const DEFAULT_COLOR = '#6A0DAD';
@@ -132,6 +134,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   let name = (options.name || '').trim();
   let companyName = '';
   let busy = false;
+  let accountSaved = false;
 
   const previousFocus = document.activeElement as HTMLElement | null;
   const previousOverflow = document.body.style.overflow;
@@ -485,6 +488,10 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     }
 
     if (loaded.kind === 'ok') {
+      if (!accountSaved && (options.appUserId || options.playPurchaseToken)) {
+        accountSaved = true;
+        void deps.saveAccount();
+      }
       renderEnrolled(loaded.details, loaded.details);
     } else if (loaded.kind === 'failed') {
       renderMessage(messageFor('NETWORK_ERROR'), () => void start());

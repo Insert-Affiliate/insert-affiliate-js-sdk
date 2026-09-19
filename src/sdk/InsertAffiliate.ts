@@ -1044,12 +1044,17 @@ export class InsertAffiliate {
     if (!this.companyCode) {
       this.verboseLog('showReferAFriend called before initialize; using the stored company code if any');
     }
+    const account: ReferrerAccountOptions = {
+      appUserId: options.appUserId,
+      playPurchaseToken: options.playPurchaseToken,
+    };
     return presentReferAFriend(options, {
       hasToken: () => this.isUserAnAffiliate(),
       loadConfig: () => this.getReferralProgramConfig(),
       loadDetails: () => this.loadMyAffiliateDetails(),
-      enrol: (email, name) => this.createAffiliateForUser(email, name),
-      verify: (email, code, name) => this.verifyAffiliateCode(email, code, name),
+      enrol: (email, name) => this.createAffiliateForUser(email, name, account),
+      verify: (email, code, name) => this.verifyAffiliateCode(email, code, name, account),
+      saveAccount: () => this.setReferrerAccount(account),
     });
   }
 

@@ -112,6 +112,10 @@ export interface ReferAFriendOptions {
   fontFamily?: string;
   /** Corner radius of the modal and its controls, in pixels. Defaults to 12. */
   cornerRadius?: number;
+  /** The user's RevenueCat app user id or Adapty customer user id, used to grant their referral rewards. */
+  appUserId?: string;
+  /** The user's own Google Play subscription purchase token (Android). */
+  playPurchaseToken?: string;
   /** Called once after the modal closes, however it was closed. */
   onClose?: () => void;
 }
