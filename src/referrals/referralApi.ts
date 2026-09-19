@@ -10,7 +10,7 @@ import type {
   ReferralTrigger,
   ReferrerAffiliate,
 } from './referralTypes';
-import { clearReferrerToken, saveReferrerToken } from './referrerTokenStore';
+import { clearReferrerToken, readReferrerToken, saveReferrerToken } from './referrerTokenStore';
 
 const BASE_URL = 'https://api.insertaffiliate.com/V1/sdk/affiliate';
 const TOKEN_HEADER = 'X-Insert-Affiliate-Token';
@@ -235,14 +235,37 @@ export const postEnrolment = async (
   }
 };
 
+/**
+ * True when the server says the token itself no longer works: 401
+ * INVALID_TOKEN or 404 AFFILIATE_NOT_FOUND. Other 401/404 responses (a proxy,
+ * a wrong URL) leave the token alone.
+ */
+export const isRevokedTokenResponse = (httpStatus: number, body: unknown): boolean => {
+  const code = isObject(body) ? str(body.code) : '';
+  return (httpStatus === 401 && code === 'INVALID_TOKEN') || (httpStatus === 404 && code === 'AFFILIATE_NOT_FOUND');
+};
+
+/**
+ * Clears the stored token after the server revoked `sentToken`, unless another
+ * request has already stored a newer one.
+ */
+const clearRevokedToken = (companyId: string, sentToken: string, log: ReferralLog): void => {
+  if (readReferrerToken(companyId) !== sentToken) {
+    log('Referrer token no longer valid; a newer token is stored, keeping it');
+    return;
+  }
+  clearReferrerToken(companyId);
+  log('Referrer token no longer valid; cleared');
+};
+
 export type MyDetailsFetch =
   | { kind: 'ok'; details: MyAffiliateDetails }
   | { kind: 'signedOut' }
   | { kind: 'failed' };
 
 /**
- * GET /me with the device token. A 401 or 404 means the token no longer
- * works, so it is cleared and the user counts as signed out.
+ * GET /me with the device token. A revoked token (401 INVALID_TOKEN or
+ * 404 AFFILIATE_NOT_FOUND) is cleared and the user counts as signed out.
  */
 export const fetchMyAffiliateDetails = async (
   companyId: string,
@@ -255,15 +278,12 @@ export const fetchMyAffiliateDetails = async (
     const response = await fetch(url, { headers: { [TOKEN_HEADER]: token } });
     log(`Referral details response status: ${response.status}`);
 
-    if (response.status === 401 || response.status === 404) {
-      clearReferrerToken(companyId);
-      log('Referrer token no longer valid; cleared');
+    const body = await readJson(response);
+    if (isRevokedTokenResponse(response.status, body)) {
+      clearRevokedToken(companyId, token, log);
       return { kind: 'signedOut' };
     }
-    if (!response.ok) return { kind: 'failed' };
-
-    const body = await readJson(response);
-    if (!isObject(body)) return { kind: 'failed' };
+    if (!response.ok || !isObject(body)) return { kind: 'failed' };
     return { kind: 'ok', details: parseMyAffiliateDetails(body) };
   } catch (error) {
     log(`Error fetching referral details: ${error}`);
@@ -273,8 +293,8 @@ export const fetchMyAffiliateDetails = async (
 
 /**
  * POST /me/identity with the device token: saves the referrer's own accounts
- * (app user id, Play purchase token, device id). A 401 or 404 clears the
- * token like fetchMyAffiliateDetails. True when the server saved them.
+ * (app user id, Play purchase token, device id). A revoked token is cleared
+ * like fetchMyAffiliateDetails. True when the server saved them.
  */
 export const postReferrerIdentity = async (
   companyId: string,
@@ -292,15 +312,12 @@ export const postReferrerIdentity = async (
     });
     log(`Referrer identity response status: ${response.status}`);
 
-    if (response.status === 401 || response.status === 404) {
-      clearReferrerToken(companyId);
-      log('Referrer token no longer valid; cleared');
+    const body = await readJson(response);
+    if (isRevokedTokenResponse(response.status, body)) {
+      clearRevokedToken(companyId, token, log);
       return false;
     }
-    if (!response.ok) return false;
-
-    const body = await readJson(response);
-    return isObject(body) && body.saved === true;
+    return response.ok && isObject(body) && body.saved === true;
   } catch (error) {
     log(`Error saving referrer identity: ${error}`);
     return false;
