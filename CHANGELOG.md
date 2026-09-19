@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `createAffiliateForUser()`, `verifyAffiliateCode()`, `getMyAffiliateDetails()`, `isUserAnAffiliate()`, `signOutAffiliate()`, `getReferralProgramConfig()`, `shareReferralLink()`
   - `showReferAFriend()` drop-in web modal (no dependencies, accessible, themeable)
   - Exported types: `AffiliateEnrolmentResult`, `MyAffiliateDetails`, `ReferralProgramConfig`, `ReferAFriendOptions`, `ReferAFriendHandle` and related
+- **Referrer rewards** - Let the server grant rewards to referrers automatically
+  - `createAffiliateForUser()` and `verifyAffiliateCode()` take optional `{ appUserId, playPurchaseToken }` and send this browser's device id
+  - `setReferrerAccount()` saves those accounts after joining, so waiting rewards are granted
+  - `MyAffiliateDetails` adds `rewardsGranted`, `premiumUntil` and `rewardCodes`
+  - The modal shows "Free premium until {date}" and a "Your rewards" list with a Redeem button per App Store offer code
+  - Exported types: `ReferrerAccountOptions`, `ReferralRewardCode`
 
 ## [1.3.1] - 2026-03-29
 

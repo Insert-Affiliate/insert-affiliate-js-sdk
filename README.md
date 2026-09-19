@@ -485,7 +485,7 @@ document.getElementById('refer-button').addEventListener('click', () => {
 });
 ```
 
-The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards.
+The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned), a "Free premium until {date}" line while a premium reward is active, a "Your rewards" list of App Store offer codes with a Redeem button each (opens the App Store redemption page in a new tab) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards.
 
 | Option | Description |
 |--------|-------------|
@@ -518,6 +518,8 @@ const details = await InsertAffiliate.getMyAffiliateDetails();
 if (details) {
   console.log(details.affiliateShortCode, details.deeplinkurl);
   console.log(`${details.referralCount} referrals, ${details.totalEarned} ${details.currency} earned`);
+  console.log(`${details.rewardsGranted} rewards, premium until ${details.premiumUntil}`);
+  details.rewardCodes.forEach((reward) => console.log(reward.code, reward.redeemUrl));
 }
 
 // 3. Share (call from a click handler)
@@ -534,7 +536,25 @@ await InsertAffiliate.signOutAffiliate();
 - Sharing uses the browser share sheet (`navigator.share`), or copies the text to the clipboard where that is not available. Default text: `Try {companyName}: {link}`, or `Use my code {code} in {companyName}` when you use Short Code Only.
 - Error codes: `INVALID_EMAIL`, `INVALID_CODE`, `PROGRAM_DISABLED`, `AFFILIATE_LIMIT_REACHED`, `TOO_MANY_CODES`, `RATE_LIMITED`, `COMPANY_NOT_FOUND`, `NETWORK_ERROR`, `NOT_INITIALIZED`.
 
-**Rewarding referrers:** values read on the device are for display. A modified browser can show anything, so grant anything valuable (credits, premium time) from your server using the `referral.created` webhook or the Public API. The webhook includes a running `referral_count`, so rewarding up to that number is safe to repeat.
+**Automatic referrer rewards:** when you set up referrer rewards in the dashboard (RevenueCat, Adapty, App Store offer codes or Google Play), pass the user's own accounts so the reward can be granted to them:
+
+```javascript
+// When they join
+await InsertAffiliate.createAffiliateForUser('jane@example.com', 'Jane', {
+  appUserId: 'RevenueCat or Adapty app user id',
+  playPurchaseToken: 'their own Google Play purchase token', // Android apps only
+});
+// verifyAffiliateCode(email, code, name, options) takes the same options
+
+// Or later, if they subscribe or log in after joining
+const saved = await InsertAffiliate.setReferrerAccount({ appUserId: 'rc_user_123' });
+```
+
+- `setReferrerAccount` needs a connected referrer on this browser and returns `false` otherwise. Any rewards that were waiting for these accounts are granted once they are saved.
+- The SDK also sends this browser's device id (the same one in `returnInsertAffiliateIdentifier()`), so a referrer who uses their own link is not counted as their own referral.
+- `rewardCodes` are App Store one-time offer codes, newest first, each with a `redeemUrl`. `premiumUntil` is an ISO date or `null`.
+
+**Rewarding referrers yourself:** values read on the device are for display. A modified browser can show anything, so grant anything valuable (credits, premium time) from your server using the `referral.created` webhook or the Public API. The webhook includes a running `referral_count`, so rewarding up to that number is safe to repeat.
 
 **Store rules:** the SDK only uses the share sheet and never asks for contacts. Never lock features behind sharing, and never reward ratings or reviews.
 
@@ -586,8 +606,9 @@ Learn more: [Prevent Affiliate Transfer Documentation](https://docs.insertaffili
 
 | Method | Description | Returns |
 |--------|-------------|---------|
-| `createAffiliateForUser(email, name)` | Make the app user a referrer, or email a code if they already are one | `Promise<AffiliateEnrolmentResult>` |
-| `verifyAffiliateCode(email, code, name?)` | Finish connecting with the emailed 6-digit code | `Promise<AffiliateEnrolmentResult>` |
+| `createAffiliateForUser(email, name, options?)` | Make the app user a referrer, or email a code if they already are one | `Promise<AffiliateEnrolmentResult>` |
+| `verifyAffiliateCode(email, code, name?, options?)` | Finish connecting with the emailed 6-digit code | `Promise<AffiliateEnrolmentResult>` |
+| `setReferrerAccount(options)` | Save the referrer's app user id or Play purchase token after joining | `Promise<boolean>` |
 | `getMyAffiliateDetails()` | Connected referrer's details and stats | `Promise<MyAffiliateDetails \| null>` |
 | `isUserAnAffiliate()` | Whether a referrer is connected on this device (no network) | `Promise<boolean>` |
 | `signOutAffiliate()` | Disconnect the referrer from this device | `Promise<void>` |
