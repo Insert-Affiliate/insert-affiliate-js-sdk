@@ -130,6 +130,32 @@ export const parseEnrolmentResponse = (
   return { result: errorResult('NETWORK_ERROR', 'Unexpected response from the server.'), token: null };
 };
 
+// Built at runtime: the compile target (ES2017) predates regex property escapes.
+const DECIMAL_DIGIT = new RegExp('\\p{Nd}', 'u');
+
+/**
+ * The emailed verification code as ASCII digits. Any Unicode decimal digit
+ * (Arabic-Indic, full-width and so on) becomes its 0-9 value; spaces, dashes
+ * and every other character are dropped.
+ */
+export const normalizeVerificationCode = (value: unknown): string => {
+  let out = '';
+  Array.from(String(value == null ? '' : value)).forEach((char) => {
+    if (char >= '0' && char <= '9') {
+      out += char;
+      return;
+    }
+    if (!DECIMAL_DIGIT.test(char)) return;
+    // Unicode encodes decimal digits in contiguous runs of whole 0-9 sets,
+    // so the value is the distance from the start of the run, mod 10.
+    const point = char.codePointAt(0) as number;
+    let start = point;
+    while (start > 0 && DECIMAL_DIGIT.test(String.fromCodePoint(start - 1))) start -= 1;
+    out += String((point - start) % 10);
+  });
+  return out;
+};
+
 // ---------------------------------------------------------------------------
 // Share text
 // ---------------------------------------------------------------------------

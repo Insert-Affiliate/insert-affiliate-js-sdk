@@ -10,7 +10,7 @@ import type {
   ReferralProgramConfig,
   ReferrerAffiliate,
 } from './referralTypes';
-import { buildReferralShareText, copyText, MyDetailsFetch, shareText } from './referralApi';
+import { buildReferralShareText, copyText, MyDetailsFetch, normalizeVerificationCode, shareText } from './referralApi';
 
 /** What the modal needs from the SDK. Passed in so the modal holds no SDK state. */
 export interface ReferAFriendDeps {
@@ -307,11 +307,17 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
         name: 'code',
         inputmode: 'numeric',
         autocomplete: 'one-time-code',
-        maxlength: '6',
-        pattern: '[0-9]*',
       },
     });
     const submit = el('button', { className: 'ia-raf-btn', text: 'Verify', attrs: { type: 'submit' } });
+    // Verify is enabled only while the field holds exactly 6 digits (after
+    // normalizing) and no verify request is in flight.
+    let verifying = false;
+    const syncSubmit = (): void => {
+      if (!verifying) submit.disabled = normalizeVerificationCode(codeInput.value).length !== 6;
+    };
+    codeInput.addEventListener('input', syncSubmit);
+    syncSubmit();
 
     const resend = button('Send a new code', 'ia-raf-textbtn', () => {
       if (busy) return;
@@ -343,16 +349,20 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     ]);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      const code = codeInput.value.replace(/\D/g, '');
+      const code = normalizeVerificationCode(codeInput.value);
       if (code.length !== 6) {
         error.textContent = 'Enter the 6-digit code from the email.';
         codeInput.focus();
         return;
       }
       error.textContent = '';
+      verifying = true;
       void runBusy(submit, 'Verifying...', async () => {
         const result = await deps.verify(email, code, name);
         if (!closed) await handleEnrolment(result, error);
+      }).then(() => {
+        verifying = false;
+        if (!closed && submit.isConnected) syncSubmit();
       });
     });
 

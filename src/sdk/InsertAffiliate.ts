@@ -6,6 +6,7 @@ import {
   fetchMyAffiliateDetails,
   fetchReferralProgramConfig,
   MyDetailsFetch,
+  normalizeVerificationCode,
   postEnrolment,
   postReferrerIdentity,
   shareText,
@@ -911,7 +912,7 @@ export class InsertAffiliate {
 
     const result = await postEnrolment('verify', companyId, {
       email: (email || '').trim(),
-      code: String(code || '').replace(/\s/g, ''),
+      code: normalizeVerificationCode(code),
       name: (name || '').trim(),
       ...await this.referrerAccountFields(options),
     }, (message) => this.verboseLog(message));
