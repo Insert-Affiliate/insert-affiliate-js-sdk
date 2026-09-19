@@ -514,8 +514,11 @@ if (result.status === 'verificationRequired') {
   console.log(result.errorCode, result.errorMessage); // e.g. PROGRAM_DISABLED
 }
 
-// 2. Read their stats
-const details = await InsertAffiliate.getMyAffiliateDetails();
+// 2. Read their stats, and load the program config (the app name used in the share text)
+const [details] = await Promise.all([
+  InsertAffiliate.getMyAffiliateDetails(),
+  InsertAffiliate.getReferralProgramConfig(),
+]);
 if (details) {
   console.log(details.affiliateShortCode, details.deeplinkurl);
   console.log(`${details.referralCount} referrals, ${details.totalEarned} ${details.currency} earned`);
@@ -523,7 +526,7 @@ if (details) {
   details.rewardCodes.forEach((reward) => console.log(reward.code, reward.redeemUrl));
 }
 
-// 3. Share (call from a click handler)
+// 3. Share (call from a click handler, after step 2 has loaded the details)
 await InsertAffiliate.shareReferralLink(); // 'shared' | 'copied' | 'cancelled' | 'failed'
 
 // On logout
@@ -534,7 +537,7 @@ await InsertAffiliate.signOutAffiliate();
 - Connecting stores a private token in `localStorage`, one per company. `isUserAnAffiliate()` checks for it without a network call. `signOutAffiliate()` removes it; the affiliate account is kept.
 - If the token stops working (for example the affiliate was removed), `getMyAffiliateDetails()` clears it and returns `null`.
 - `referralCount` is the count for the trigger you chose in the dashboard (install, event or purchase). It only ever goes up.
-- Sharing uses the browser share sheet (`navigator.share`), or copies the text to the clipboard where that is not available. Default text: `Try {companyName}: {link}`, or `Use my code {code} in {companyName}` when you use Short Code Only.
+- Sharing uses the browser share sheet (`navigator.share`), or copies the text to the clipboard where that is not available. Browsers only allow either shortly after the tap, so `shareReferralLink()` never waits on the network: it uses the details and config already loaded by `getMyAffiliateDetails()` and `getReferralProgramConfig()`, and returns `'failed'` if the details are not loaded yet. Default text: `Try {companyName}: {link}`, or `Use my code {code} in {companyName}` when you use Short Code Only.
 - Error codes: `INVALID_EMAIL`, `INVALID_CODE`, `PROGRAM_DISABLED`, `AFFILIATE_LIMIT_REACHED`, `TOO_MANY_CODES`, `RATE_LIMITED`, `COMPANY_NOT_FOUND`, `NETWORK_ERROR`, `NOT_INITIALIZED`.
 
 **Automatic referrer rewards:** when you set up referrer rewards in the dashboard (RevenueCat, Adapty, App Store offer codes or Google Play), pass the user's own accounts so the reward can be granted to them:

@@ -65,9 +65,9 @@ export class InsertAffiliate {
   private static affiliateAttributionActiveTime: number | null = null; // in milliseconds
   private static preventAffiliateTransfer: boolean = false;
   private static offerCode: string | null = null;
-  // Last referral details and config seen, so shareReferralLink can open the
-  // share sheet without a network round trip (browsers require the share to
-  // follow the user's tap closely).
+  // Last referral details and config seen. shareReferralLink uses only these,
+  // so the share sheet opens without a network round trip (browsers require
+  // the share to follow the user's tap closely).
   private static lastReferralDetails: MyAffiliateDetails | null = null;
   private static lastReferralConfig: ReferralProgramConfig | null = null;
 
@@ -1014,23 +1014,30 @@ export class InsertAffiliate {
   /**
    * Shares the connected user's referral link with the system share sheet,
    * or copies it to the clipboard where sharing is unavailable.
-   * Call from a click handler. Uses the details from the last
-   * getMyAffiliateDetails call when available, so the share stays tied to the tap.
+   * Call from a click handler. Browsers only allow sharing and copying
+   * shortly after the tap, so this never waits on the network: it uses the
+   * details from the last getMyAffiliateDetails call and the app name from
+   * the last getReferralProgramConfig call. Load both before the user taps.
+   * Without loaded details it returns 'failed' and starts loading them, so a
+   * later tap can share.
    * @param message Optional message. May use {link} and {code} placeholders.
    */
   static async shareReferralLink(message?: string): Promise<ReferralShareOutcome> {
     this.verboseLog('Sharing referral link...');
-    const details = this.lastReferralDetails || await this.getMyAffiliateDetails();
+    const details = this.lastReferralDetails;
+    const config = this.lastReferralConfig;
+    if (!config) void this.getReferralProgramConfig();
     if (!details) {
-      this.verboseLog('Cannot share: no referrer connected on this device');
+      this.verboseLog('Cannot share: referrer details not loaded. Call getMyAffiliateDetails before the tap');
+      void this.getMyAffiliateDetails();
       return 'failed';
     }
-    const config = this.lastReferralConfig || await this.getReferralProgramConfig();
     const text = buildReferralShareText(details, config ? config.companyName : '', message);
     const outcome = await shareText(text);
     this.verboseLog(`Share outcome: ${outcome}`);
     return outcome;
   }
+
 
   /**
    * Presents the drop-in "Refer a friend" modal. Handles enrolment, the
