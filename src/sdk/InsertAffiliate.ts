@@ -1034,7 +1034,8 @@ export class InsertAffiliate {
 
   /**
    * Presents the drop-in "Refer a friend" modal. Handles enrolment, the
-   * email code step, sharing and stats. Browser only.
+   * email code step, sharing and stats. Browser only. Only one modal is
+   * shown at a time: calling this while it is open focuses the open one.
    * @returns A handle whose close() dismisses the modal
    */
   static showReferAFriend(options: ReferAFriendOptions = {}): ReferAFriendHandle {

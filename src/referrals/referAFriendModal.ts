@@ -76,6 +76,9 @@ const STYLE = `
 
 let instanceCount = 0;
 
+// The open modal, if any. Only one is shown at a time.
+let openModal: { handle: ReferAFriendHandle; focus(): void } | null = null;
+
 type Child = Node | string | null | undefined | false;
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -124,8 +127,15 @@ export function futureDateLabel(iso: string | null, now: number = Date.now()): s
   }
 }
 
-/** Presents the modal. Only valid in a browser. */
+/**
+ * Presents the modal. Only valid in a browser. While a modal is open, another
+ * call focuses it and returns its handle; the new options are not applied.
+ */
 export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFriendDeps): ReferAFriendHandle {
+  if (openModal) {
+    openModal.focus();
+    return openModal.handle;
+  }
   instanceCount += 1;
   const titleId = `ia-raf-title-${instanceCount}`;
 
@@ -172,6 +182,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   function close(): void {
     if (closed) return;
     closed = true;
+    if (openModal && openModal.handle === handle) openModal = null;
     document.removeEventListener('keydown', onKeyDown, true);
     overlay.remove();
     style.remove();
@@ -512,7 +523,15 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     }
   }
 
+  const handle: ReferAFriendHandle = { close };
+  openModal = {
+    handle,
+    focus: () => {
+      if (!dialog.contains(document.activeElement)) (focusables()[0] || closeButton).focus();
+    },
+  };
+
   void start();
 
-  return { close };
+  return handle;
 }
