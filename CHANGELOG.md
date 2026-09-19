@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `setReferrerAccount()` saves those accounts after joining, so waiting rewards are granted
   - `MyAffiliateDetails` adds `rewardsGranted`, `premiumUntil` and `rewardCodes`
   - `showReferAFriend()` takes optional `appUserId` and `playPurchaseToken` and passes them on, so modal-only apps need no extra call
-  - The modal shows "Free premium until {date}" and a "Your rewards" list with a Redeem button per App Store offer code
+  - The modal shows "Free premium until {date}" and a "Your rewards" list with a Redeem button per App Store offer code or Google Play promo code; each `ReferralRewardCode` has a `store`
   - Exported types: `ReferrerAccountOptions`, `ReferralRewardCode`
 
 ## [1.3.1] - 2026-03-29

@@ -48,7 +48,12 @@ export const parseReferrerAffiliate = (raw: unknown): ReferrerAffiliate => {
 const parseRewardCodes = (value: unknown): ReferralRewardCode[] =>
   (Array.isArray(value) ? value : [])
     .filter(isObject)
-    .map((item) => ({ code: str(item.code), redeemUrl: str(item.redeemUrl), grantedAt: str(item.grantedAt) }))
+    .map((item) => ({
+      code: str(item.code),
+      redeemUrl: str(item.redeemUrl),
+      store: str(item.store) || 'app_store',
+      grantedAt: str(item.grantedAt),
+    }))
     .filter((item) => item.code);
 
 export const parseMyAffiliateDetails = (raw: unknown): MyAffiliateDetails => {

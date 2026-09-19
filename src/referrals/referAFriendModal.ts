@@ -436,7 +436,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
       if (premiumUntil) {
         children.push(el('p', { className: 'ia-raf-premium', text: `Free premium until ${premiumUntil}` }));
       }
-      // App Store offer codes. Shown on the web too: an iPhone user opens the link there anyway.
+      // App Store and Google Play codes. Both show on the web: the referrer may be on either phone.
       if (stats.rewardCodes.length) {
         const rewardsTitleId = `${titleId}-rewards`;
         children.push(

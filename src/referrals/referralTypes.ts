@@ -34,11 +34,13 @@ export interface MyAffiliateDetails extends ReferrerAffiliate {
   rewardCodes: ReferralRewardCode[];
 }
 
-/** An App Store one-time offer code granted as a referral reward. */
+/** A referral reward code: an App Store offer code or a Google Play promo code. */
 export interface ReferralRewardCode {
   code: string;
-  /** Opens the App Store redemption page with the code filled in. */
+  /** Opens the store's redemption page with the code filled in. */
   redeemUrl: string;
+  /** Which store the code is for. Older servers don't send it; those are App Store codes. */
+  store: 'app_store' | 'google_play' | string;
   /** ISO date the code was granted. */
   grantedAt: string;
 }
