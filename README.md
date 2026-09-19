@@ -467,7 +467,7 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 
 Turn your own users into affiliates from inside your app, show them a ready-made "Refer a friend" screen, and read their referral stats so you can reward them. Referrers are normal affiliates: they get the same dashboard, referrals tab and commission as any other affiliate.
 
-Switch the program on in your Insert Affiliate dashboard first. The requests come from the browser, so your site's origin must be in your company's allowed origins.
+Switch the program on in your Insert Affiliate dashboard first.
 
 **Drop-in modal (quickest):**
 
@@ -485,7 +485,7 @@ document.getElementById('refer-button').addEventListener('click', () => {
 });
 ```
 
-The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned), a "Free premium until {date}" line while a premium reward is active, a "Your rewards" list of App Store offer codes with a Redeem button each (opens the App Store redemption page in a new tab) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards.
+The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned), a "Free premium until {date}" line while a premium reward is active, a "Your rewards" list of App Store offer codes or Google Play promo codes with a Redeem button each (opens the store's redemption page in a new tab) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards. Only one modal is shown at a time: calling `showReferAFriend` again while it is open focuses the open one.
 
 | Option | Description |
 |--------|-------------|
@@ -556,7 +556,7 @@ const saved = await InsertAffiliate.setReferrerAccount({ appUserId: 'rc_user_123
 
 - `setReferrerAccount` needs a connected referrer on this browser and returns `false` otherwise. Any rewards that were waiting for these accounts are granted once they are saved.
 - The SDK also sends this browser's device id (the same one in `returnInsertAffiliateIdentifier()`), so a referrer who uses their own link is not counted as their own referral.
-- `rewardCodes` are App Store one-time offer codes, newest first, each with a `redeemUrl`. `premiumUntil` is an ISO date or `null`.
+- `rewardCodes` are App Store offer codes or Google Play promo codes, newest first, each with a `redeemUrl` and a `store` (`app_store` or `google_play`). `premiumUntil` is an ISO date or `null`.
 
 **Rewarding referrers yourself:** values read on the device are for display. A modified browser can show anything, so grant anything valuable (credits, premium time) from your server using the `referral.created` webhook or the Public API. The webhook includes a running `referral_count`, so rewarding up to that number is safe to repeat.
 

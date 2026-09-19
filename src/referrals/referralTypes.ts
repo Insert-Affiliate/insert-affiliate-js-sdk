@@ -30,7 +30,7 @@ export interface MyAffiliateDetails extends ReferrerAffiliate {
   rewardsGranted: number;
   /** ISO date the user's free premium from referrals runs until, or null. */
   premiumUntil: string | null;
-  /** App Store one-time offer codes granted as rewards, newest first. */
+  /** App Store offer codes or Google Play promo codes granted as rewards, newest first. */
   rewardCodes: ReferralRewardCode[];
 }
 
