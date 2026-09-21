@@ -8,9 +8,11 @@ import type {
   ReferAFriendHandle,
   ReferAFriendOptions,
   ReferralProgramConfig,
+  ReferralStrings,
   ReferrerAffiliate,
 } from './referralTypes';
 import { buildReferralShareText, copyText, MyDetailsFetch, normalizeVerificationCode, shareText } from './referralApi';
+import { ERROR_STRING_KEYS, fillPlaceholders, resolveReferralStrings } from './referralStrings';
 
 /** What the modal needs from the SDK. Passed in so the modal holds no SDK state. */
 export interface ReferAFriendDeps {
@@ -27,19 +29,6 @@ const DEFAULT_COLOR = '#6A0DAD';
 const DEFAULT_HEADLINE = 'Refer a friend';
 const DEFAULT_FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-
-const ERROR_MESSAGES: Record<string, string> = {
-  PROGRAM_DISABLED: 'Referrals are not available in this app right now.',
-  AFFILIATE_LIMIT_REACHED: 'The referral program is full right now. Please try again later.',
-  INVALID_CODE: 'That code is wrong or has expired. Check it or send a new code.',
-  TOO_MANY_CODES: 'Too many codes have been sent. Please wait a while and try again.',
-  RATE_LIMITED: 'Too many attempts. Please try again later.',
-  INVALID_EMAIL: 'Please enter a valid email address.',
-  NETWORK_ERROR: 'Could not connect. Check your connection and try again.',
-};
-const GENERIC_ERROR = 'Something went wrong. Please try again.';
-
-const messageFor = (code?: string): string => (code && ERROR_MESSAGES[code]) || GENERIC_ERROR;
 
 const STYLE = `
 .ia-raf-overlay{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
@@ -145,6 +134,9 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   let companyName = '';
   let busy = false;
   let accountSaved = false;
+  const text = resolveReferralStrings(options.strings);
+  const messageFor = (code?: string): string =>
+    text[(code && ERROR_STRING_KEYS[code]) || 'errorServer'];
 
   const previousFocus = document.activeElement as HTMLElement | null;
   const previousOverflow = document.body.style.overflow;
@@ -155,7 +147,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   reward.hidden = !options.rewardText;
   const body = el('div');
   const closeButton = button('×', 'ia-raf-close', () => close());
-  closeButton.setAttribute('aria-label', 'Close');
+  closeButton.setAttribute('aria-label', text.closeButton);
 
   const dialog = el('div', {
     className: 'ia-raf-dialog',
@@ -239,13 +231,13 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   }
 
   function renderLoading(): void {
-    render([el('p', { className: 'ia-raf-muted', text: 'Loading...', attrs: { role: 'status' } })], closeButton);
+    render([el('p', { className: 'ia-raf-muted', text: text.loading, attrs: { role: 'status' } })], closeButton);
   }
 
   function renderMessage(message: string, retry?: () => void): void {
     render([
       el('p', { className: 'ia-raf-error', text: message, attrs: { role: 'alert' } }),
-      retry ? button('Try again', 'ia-raf-btn', retry) : null,
+      retry ? button(text.tryAgainButton, 'ia-raf-btn', retry) : null,
     ]);
   }
 
@@ -284,12 +276,12 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     emailInput.value = email;
     const nameInput = el('input', { attrs: { type: 'text', name: 'name', autocomplete: 'name' } });
     nameInput.value = name;
-    const submit = el('button', { className: 'ia-raf-btn', text: 'Get my link', attrs: { type: 'submit' } });
+    const submit = el('button', { className: 'ia-raf-btn', text: text.joinButton, attrs: { type: 'submit' } });
 
     const form = el('form', { attrs: { novalidate: 'true' } }, [
       error,
-      ...field('Email', emailInput),
-      ...field('Name', nameInput),
+      ...field(text.emailLabel, emailInput),
+      ...field(text.nameLabel, nameInput),
       submit,
     ]);
     form.addEventListener('submit', (event) => {
@@ -297,12 +289,12 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
       email = emailInput.value.trim();
       name = nameInput.value.trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        error.textContent = messageFor('INVALID_EMAIL');
+        error.textContent = text.errorInvalidEmail;
         emailInput.focus();
         return;
       }
       error.textContent = '';
-      void runBusy(submit, 'Please wait...', async () => {
+      void runBusy(submit, text.joiningButton, async () => {
         const result = await deps.enrol(email, name);
         if (!closed) await handleEnrolment(result, error);
       });
@@ -322,7 +314,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
         autocomplete: 'one-time-code',
       },
     });
-    const submit = el('button', { className: 'ia-raf-btn', text: 'Verify', attrs: { type: 'submit' } });
+    const submit = el('button', { className: 'ia-raf-btn', text: text.verifyButton, attrs: { type: 'submit' } });
     // Verify is enabled only while the field holds exactly 6 digits (after
     // normalizing) and no verify request is in flight.
     let verifying = false;
@@ -332,30 +324,30 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     codeInput.addEventListener('input', syncSubmit);
     syncSubmit();
 
-    const resend = button('Send a new code', 'ia-raf-textbtn', () => {
+    const resend = button(text.resendButton, 'ia-raf-textbtn', () => {
       if (busy) return;
       error.textContent = '';
-      status.textContent = 'Sending...';
+      status.textContent = text.sendingNotice;
       busy = true;
       void deps.enrol(email, name).then((result) => {
         busy = false;
         if (closed) return;
         status.textContent = '';
         if (result.status === 'verificationRequired') {
-          status.textContent = 'We sent a new code.';
+          status.textContent = text.codeResentNotice;
         } else {
           void handleEnrolment(result, error);
         }
       });
     });
-    const changeEmail = button('Use a different email', 'ia-raf-textbtn', () => {
+    const changeEmail = button(text.differentEmailButton, 'ia-raf-textbtn', () => {
       if (!busy) renderEnrolForm();
     });
 
     const form = el('form', { attrs: { novalidate: 'true' } }, [
-      el('p', { className: 'ia-raf-muted', text: `We sent a 6-digit code to ${email}. Enter it below to connect this device.` }),
+      el('p', { className: 'ia-raf-muted', text: fillPlaceholders(text.codeSentNotice, { email }) }),
       error,
-      ...field('Code', codeInput),
+      ...field(text.codeLabel, codeInput),
       submit,
       el('div', {}, [resend, changeEmail]),
       status,
@@ -364,13 +356,13 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
       event.preventDefault();
       const code = normalizeVerificationCode(codeInput.value);
       if (code.length !== 6) {
-        error.textContent = 'Enter the 6-digit code from the email.';
+        error.textContent = text.errorCodeLength;
         codeInput.focus();
         return;
       }
       error.textContent = '';
       verifying = true;
-      void runBusy(submit, 'Verifying...', async () => {
+      void runBusy(submit, text.verifyingButton, async () => {
         const result = await deps.verify(email, code, name);
         if (!closed) await handleEnrolment(result, error);
       }).then(() => {
@@ -406,13 +398,13 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   function renderEnrolled(affiliate: ReferrerAffiliate, stats: MyAffiliateDetails | null): void {
     const status = el('p', { className: 'ia-raf-status', attrs: { role: 'status', 'aria-live': 'polite' } });
     const hasLink = /^http/i.test(affiliate.deeplinkurl);
-    const text = buildReferralShareText(affiliate, companyName, options.shareMessage);
+    const messageToShare = buildReferralShareText(affiliate, companyName, options.shareMessage);
 
     const copyButton = (label: string, value: string): HTMLButtonElement => {
       const node = button(label, 'ia-raf-copy', () => {
         void copyText(value).then((ok) => {
           if (closed) return;
-          status.textContent = ok ? 'Copied' : 'Could not copy. Select the text to copy it.';
+          status.textContent = ok ? text.copiedNotice : text.copyFailedNotice;
         });
       });
       node.setAttribute('aria-label', `${label}: ${value}`);
@@ -423,22 +415,22 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     if (affiliate.affiliateShortCode) {
       children.push(el('div', { className: 'ia-raf-row' }, [
         el('span', { className: 'ia-raf-code', text: affiliate.affiliateShortCode }),
-        copyButton('Copy code', affiliate.affiliateShortCode),
+        copyButton(text.copyCodeButton, affiliate.affiliateShortCode),
       ]));
     }
     if (hasLink) {
       children.push(el('div', { className: 'ia-raf-row' }, [
         el('span', { className: 'ia-raf-url', text: affiliate.deeplinkurl }),
-        copyButton('Copy link', affiliate.deeplinkurl),
+        copyButton(text.copyLinkButton, affiliate.deeplinkurl),
       ]));
     }
 
-    if (text) {
-      children.push(button('Share', 'ia-raf-btn', () => {
-        void shareText(text).then((outcome) => {
+    if (messageToShare) {
+      children.push(button(text.shareButton, 'ia-raf-btn', () => {
+        void shareText(messageToShare).then((outcome) => {
           if (closed) return;
-          if (outcome === 'copied') status.textContent = 'Copied';
-          else if (outcome === 'failed') status.textContent = 'Could not share. Copy your code instead.';
+          if (outcome === 'copied') status.textContent = text.copiedNotice;
+          else if (outcome === 'failed') status.textContent = text.shareFailedNotice;
           else status.textContent = '';
         });
       }));
@@ -448,30 +440,33 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
       children.push(el('div', { className: 'ia-raf-stats' }, [
         el('div', { className: 'ia-raf-stat' }, [
           el('span', { className: 'ia-raf-stat-value', text: String(stats.referralCount) }),
-          el('span', { className: 'ia-raf-stat-label', text: 'Referrals' }),
+          el('span', { className: 'ia-raf-stat-label', text: text.referralsLabel }),
         ]),
         el('div', { className: 'ia-raf-stat' }, [
           el('span', { className: 'ia-raf-stat-value', text: formatMoney(stats.totalEarned, stats.currency) }),
-          el('span', { className: 'ia-raf-stat-label', text: 'Earned' }),
+          el('span', { className: 'ia-raf-stat-label', text: text.earnedLabel }),
         ]),
       ]));
       const premiumUntil = futureDateLabel(stats.premiumUntil);
       if (premiumUntil) {
-        children.push(el('p', { className: 'ia-raf-premium', text: `Free premium until ${premiumUntil}` }));
+        children.push(el('p', {
+          className: 'ia-raf-premium',
+          text: fillPlaceholders(text.premiumUntil, { date: premiumUntil }),
+        }));
       }
       // App Store and Google Play codes. Both show on the web: the referrer may be on either phone.
       if (stats.rewardCodes.length) {
         const rewardsTitleId = `${titleId}-rewards`;
         children.push(
-          el('h3', { className: 'ia-raf-rewards-title', text: 'Your rewards', attrs: { id: rewardsTitleId } }),
+          el('h3', { className: 'ia-raf-rewards-title', text: text.rewardsHeading, attrs: { id: rewardsTitleId } }),
           el('ul', { className: 'ia-raf-rewards', attrs: { 'aria-labelledby': rewardsTitleId } }, stats.rewardCodes.map((reward) => {
             const redeemUrl = reward.redeemUrl;
             let redeem: HTMLButtonElement | null = null;
             if (isHttpsUrl(redeemUrl)) {
-              redeem = button('Redeem', 'ia-raf-copy', () => {
+              redeem = button(text.redeemButton, 'ia-raf-copy', () => {
                 window.open(redeemUrl, '_blank', 'noopener,noreferrer');
               });
-              redeem.setAttribute('aria-label', `Redeem ${reward.code}`);
+              redeem.setAttribute('aria-label', `${text.redeemButton} ${reward.code}`);
             }
             return el('li', { className: 'ia-raf-row' }, [
               el('span', { className: 'ia-raf-reward-code', text: reward.code }),
@@ -482,7 +477,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
       }
       if (isHttpsUrl(stats.dashboardUrl)) {
         const dashboardUrl = stats.dashboardUrl;
-        children.push(button('Open my dashboard', 'ia-raf-btn ia-raf-btn-secondary', () => {
+        children.push(button(text.dashboardLink, 'ia-raf-btn ia-raf-btn-secondary', () => {
           window.open(dashboardUrl, '_blank', 'noopener,noreferrer');
         }));
       }

@@ -97,6 +97,87 @@ export interface AffiliateEnrolmentResult {
 /** How a share ended: the share sheet completed, the text was copied instead, the user dismissed the sheet, or neither was possible. */
 export type ReferralShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed';
 
+/**
+ * Every label the "Refer a friend" modal shows, so an app can translate or
+ * reword it. Pass only the keys you want to change: the rest keep the English
+ * defaults, and a blank value keeps the default too. Keep the `{email}` and
+ * `{date}` placeholders in the strings that have them.
+ */
+export interface ReferralStrings {
+  /** "Email" */
+  emailLabel: string;
+  /** "Name" */
+  nameLabel: string;
+  /** "Get my link" */
+  joinButton: string;
+  /** "Please wait..." while joining */
+  joiningButton: string;
+  /** "Code" */
+  codeLabel: string;
+  /** "We sent a 6-digit code to {email}. Enter it below to connect this device." */
+  codeSentNotice: string;
+  /** "Verify" */
+  verifyButton: string;
+  /** "Verifying..." while the code is checked */
+  verifyingButton: string;
+  /** "Send a new code" */
+  resendButton: string;
+  /** "Sending..." while a new code is sent */
+  sendingNotice: string;
+  /** "We sent a new code." */
+  codeResentNotice: string;
+  /** "Use a different email" */
+  differentEmailButton: string;
+  /** "Enter the 6-digit code from the email." */
+  errorCodeLength: string;
+  /** "Copy code" */
+  copyCodeButton: string;
+  /** "Copy link" */
+  copyLinkButton: string;
+  /** "Copied" */
+  copiedNotice: string;
+  /** "Could not copy. Select the text to copy it." */
+  copyFailedNotice: string;
+  /** "Share" */
+  shareButton: string;
+  /** "Could not share. Copy your code instead." */
+  shareFailedNotice: string;
+  /** "Referrals" */
+  referralsLabel: string;
+  /** "Earned" */
+  earnedLabel: string;
+  /** "Free premium until {date}" */
+  premiumUntil: string;
+  /** "Your rewards" */
+  rewardsHeading: string;
+  /** "Redeem" */
+  redeemButton: string;
+  /** "Open my dashboard" */
+  dashboardLink: string;
+  /** The close button's accessible name, "Close" */
+  closeButton: string;
+  /** "Loading..." */
+  loading: string;
+  /** "Try again" */
+  tryAgainButton: string;
+  /** PROGRAM_DISABLED */
+  errorProgramDisabled: string;
+  /** AFFILIATE_LIMIT_REACHED */
+  errorAffiliateLimitReached: string;
+  /** INVALID_CODE */
+  errorInvalidCode: string;
+  /** TOO_MANY_CODES */
+  errorTooManyCodes: string;
+  /** RATE_LIMITED */
+  errorRateLimited: string;
+  /** INVALID_EMAIL */
+  errorInvalidEmail: string;
+  /** NETWORK_ERROR, and any unreadable response */
+  errorNetwork: string;
+  /** Every other error, "Something went wrong. Please try again." */
+  errorServer: string;
+}
+
 export interface ReferAFriendOptions {
   /** Prefills the email field (usually the app's logged-in user). */
   email?: string;
@@ -118,6 +199,8 @@ export interface ReferAFriendOptions {
   appUserId?: string;
   /** The user's own Google Play subscription purchase token (Android). */
   playPurchaseToken?: string;
+  /** Replaces any of the modal's labels, for translating or rewording it. */
+  strings?: Partial<ReferralStrings>;
   /** Called once after the modal closes, however it was closed. */
   onClose?: () => void;
 }

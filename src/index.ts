@@ -9,6 +9,7 @@ export type {
   ReferralProgramConfig,
   ReferralRewardCode,
   ReferralShareOutcome,
+  ReferralStrings,
   ReferralTrigger,
   ReferrerAccountOptions,
   ReferrerAffiliate,
