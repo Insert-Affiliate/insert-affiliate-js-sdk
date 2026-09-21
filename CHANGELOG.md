@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `showReferAFriend()` takes optional `appUserId` and `playPurchaseToken` and passes them on, so modal-only apps need no extra call
   - The modal shows "Free premium until {date}" and a "Your rewards" list with a Redeem button per App Store offer code or Google Play promo code; each `ReferralRewardCode` has a `store`
   - Exported types: `ReferrerAccountOptions`, `ReferralRewardCode`
+- **Modal text overrides** - `showReferAFriend({ strings })` replaces any label in the modal, so a site can translate or reword it
+  - Every key is optional: a missing, blank or unknown key keeps the English default, so nothing changes for apps that do not pass `strings`
+  - `codeSentNotice` keeps `{email}` and `premiumUntil` keeps `{date}`
+  - Exported type: `ReferralStrings`
 
 ## [1.3.1] - 2026-03-29
 

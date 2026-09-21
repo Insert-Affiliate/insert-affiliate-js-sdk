@@ -495,11 +495,70 @@ The modal handles everything: the "Get my link" form, the 6-digit email code ste
 | `headline`, `rewardText` | Override the dashboard copy. Default headline "Refer a friend" |
 | `fontFamily`, `cornerRadius` | Match your app's look |
 | `appUserId`, `playPurchaseToken` | The user's own accounts, for automatic referrer rewards. Sent when the user joins, or saved once when the modal opens for a user who already joined |
+| `strings` | Replaces any of the modal's labels, for translating or rewording it |
 | `onClose` | Called once when the modal closes |
 
 Headline, reward text and colour set in the dashboard are used when you do not pass them, so wording changes need no release.
 
+**Translating the modal:** pass `strings` with the keys you want to change. Every key is optional: a missing or blank one keeps the English default, and an unknown one is ignored.
+
+```javascript
+InsertAffiliate.showReferAFriend({
+  headline: 'Parrainez un ami',
+  strings: {
+    emailLabel: 'E-mail',
+    nameLabel: 'Nom',
+    joinButton: 'Obtenir mon lien',
+    codeSentNotice: 'Nous avons envoye un code a 6 chiffres a {email}.',
+    verifyButton: 'Valider',
+    copyCodeButton: 'Copier le code',
+    shareButton: 'Partager',
+    referralsLabel: 'Parrainages',
+    earnedLabel: 'Gagne',
+    premiumUntil: 'Premium gratuit jusqu\'au {date}',
+    errorNetwork: 'Connexion impossible. Verifiez votre connexion.',
+  },
+});
+```
+
+Keep the `{email}` placeholder in `codeSentNotice` and `{date}` in `premiumUntil`; they are filled in for you.
+
+| Group | Keys |
+|-------|------|
+| Joining | `emailLabel`, `nameLabel`, `joinButton`, `joiningButton` |
+| Email code step | `codeLabel`, `codeSentNotice` (`{email}`), `verifyButton`, `verifyingButton`, `resendButton`, `sendingNotice`, `codeResentNotice`, `differentEmailButton`, `errorCodeLength` |
+| Joined | `copyCodeButton`, `copyLinkButton`, `copiedNotice`, `copyFailedNotice`, `shareButton`, `shareFailedNotice`, `referralsLabel`, `earnedLabel`, `premiumUntil` (`{date}`), `rewardsHeading`, `redeemButton`, `dashboardLink` |
+| Frame and states | `closeButton`, `loading`, `tryAgainButton` |
+| Errors | `errorProgramDisabled`, `errorAffiliateLimitReached`, `errorInvalidCode`, `errorTooManyCodes`, `errorRateLimited`, `errorInvalidEmail`, `errorNetwork`, `errorServer` |
+
+`headline` and `rewardText` are not in `strings`: they come from the dashboard and are overridden with their own options. The full type is exported as `ReferralStrings`.
+
 **Build your own screen:**
+
+You can skip the modal and use the methods directly. In the order an app calls them:
+
+1. `getReferralProgramConfig()` to check the program is on (`enabled`) and to read the dashboard copy, colour and `companyName`.
+2. `isUserAnAffiliate()` to see whether this browser is already connected (no network call).
+3. `createAffiliateForUser(email, name, options?)` to join. `status` is `created` (connected, `affiliate` holds the code and link), `verificationRequired` (a 6-digit code was emailed) or `error`.
+4. `verifyAffiliateCode(email, code, name?, options?)` for the code step. Call `createAffiliateForUser` again to send a new code.
+5. `getMyAffiliateDetails()` for the code, link, `referralCount`, `totalEarned`, `currency`, `rewardsGranted`, `premiumUntil`, `rewardCodes` (each with `code`, `store` and `redeemUrl`) and `dashboardUrl`.
+6. `setReferrerAccount({ appUserId, playPurchaseToken })` when the user subscribes or logs in after joining.
+7. `shareReferralLink(message?)` from a click handler, or build your own text from `details.affiliateShortCode` and `details.deeplinkurl`.
+8. `signOutAffiliate()` on logout.
+
+States to handle:
+
+| State | How you know | What to show |
+|-------|--------------|--------------|
+| Program off | `config.enabled === false` | Hide the entry point |
+| Not enrolled | `isUserAnAffiliate()` is false | Your email and name form |
+| Code needed | `status === 'verificationRequired'` | A 6-digit code field, with resend and "use a different email" |
+| Enrolled | `getMyAffiliateDetails()` returns details | The code and link with copy and share, plus the stats |
+| Rewards | `premiumUntil` in the future, or `rewardCodes` is not empty | The premium line, and each code with a link to `redeemUrl` |
+| Errors | `result.status === 'error'`, then `result.errorCode` | Your own wording per code |
+| Disconnected | `getMyAffiliateDetails()` returns `null` while `isUserAnAffiliate()` is false | Back to the join form |
+
+`getMyAffiliateDetails()` returns `null` both when the browser is not connected and when the request failed. Check `isUserAnAffiliate()` afterwards to tell them apart: still `true` means the request failed and is worth retrying.
 
 ```javascript
 // 1. Make the user a referrer
