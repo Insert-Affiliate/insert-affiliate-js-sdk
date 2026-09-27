@@ -462,6 +462,167 @@ InsertAffiliate.setInsertAffiliateIdentifierChangeCallback(null);
 
 </details>
 
+<details>
+<summary><h3>In-App Referrals (Refer a Friend)</h3></summary>
+
+Turn your own users into affiliates from inside your app, show them a ready-made "Refer a friend" screen, and read their referral stats so you can reward them. Referrers are normal affiliates: they get the same dashboard, referrals tab and commission as any other affiliate.
+
+Switch the program on in your Insert Affiliate dashboard first.
+
+**Drop-in modal (quickest):**
+
+```javascript
+import { InsertAffiliate } from 'insert-affiliate-js-sdk';
+
+document.getElementById('refer-button').addEventListener('click', () => {
+  const modal = InsertAffiliate.showReferAFriend({
+    email: currentUser.email, // prefills the form (usually your logged-in user)
+    name: currentUser.name,
+    onClose: () => console.log('Refer a friend closed'),
+  });
+
+  // modal.close() dismisses it from code
+});
+```
+
+The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned), a "Free premium until {date}" line while a premium reward is active, a "Your rewards" list of App Store offer codes or Google Play promo codes with a Redeem button each (opens the store's redemption page in a new tab) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards. Only one modal is shown at a time: calling `showReferAFriend` again while it is open focuses the open one.
+
+| Option | Description |
+|--------|-------------|
+| `email`, `name` | Prefill the form |
+| `shareMessage` | Share message. May use `{link}` and `{code}` placeholders |
+| `primaryColor` | Overrides the dashboard colour (any CSS colour). Default `#6A0DAD` |
+| `headline`, `rewardText` | Override the dashboard copy. Default headline "Refer a friend" |
+| `fontFamily`, `cornerRadius` | Match your app's look |
+| `appUserId`, `playPurchaseToken` | The user's own accounts, for automatic referrer rewards. Sent when the user joins, or saved once when the modal opens for a user who already joined |
+| `strings` | Replaces any of the modal's labels, for translating or rewording it |
+| `onClose` | Called once when the modal closes |
+
+Headline, reward text and colour set in the dashboard are used when you do not pass them, so wording changes need no release.
+
+**Translating the modal:** pass `strings` with the keys you want to change. Every key is optional: a missing or blank one keeps the English default, and an unknown one is ignored.
+
+```javascript
+InsertAffiliate.showReferAFriend({
+  headline: 'Parrainez un ami',
+  strings: {
+    emailLabel: 'E-mail',
+    nameLabel: 'Nom',
+    joinButton: 'Obtenir mon lien',
+    codeSentNotice: 'Nous avons envoye un code a 6 chiffres a {email}.',
+    verifyButton: 'Valider',
+    copyCodeButton: 'Copier le code',
+    shareButton: 'Partager',
+    referralsLabel: 'Parrainages',
+    earnedLabel: 'Gagne',
+    premiumUntil: 'Premium gratuit jusqu\'au {date}',
+    errorNetwork: 'Connexion impossible. Verifiez votre connexion.',
+  },
+});
+```
+
+Keep the `{email}` placeholder in `codeSentNotice` and `{date}` in `premiumUntil`; they are filled in for you.
+
+| Group | Keys |
+|-------|------|
+| Joining | `emailLabel`, `nameLabel`, `joinButton`, `joiningButton` |
+| Email code step | `codeLabel`, `codeSentNotice` (`{email}`), `verifyButton`, `verifyingButton`, `resendButton`, `sendingNotice`, `codeResentNotice`, `differentEmailButton`, `errorCodeLength` |
+| Joined | `copyCodeButton`, `copyLinkButton`, `copiedNotice`, `copyFailedNotice`, `shareButton`, `shareFailedNotice`, `referralsLabel`, `earnedLabel`, `premiumUntil` (`{date}`), `rewardsHeading`, `redeemButton`, `dashboardLink` |
+| Frame and states | `closeButton`, `loading`, `tryAgainButton` |
+| Errors | `errorProgramDisabled`, `errorAffiliateLimitReached`, `errorInvalidCode`, `errorTooManyCodes`, `errorRateLimited`, `errorInvalidEmail`, `errorNetwork`, `errorServer` |
+
+`headline` and `rewardText` are not in `strings`: they come from the dashboard and are overridden with their own options. The full type is exported as `ReferralStrings`.
+
+**Build your own screen:**
+
+You can skip the modal and use the methods directly. In the order an app calls them:
+
+1. `getReferralProgramConfig()` to check the program is on (`enabled`) and to read the dashboard copy, colour and `companyName`.
+2. `isUserAnAffiliate()` to see whether this browser is already connected (no network call).
+3. `createAffiliateForUser(email, name, options?)` to join. `status` is `created` (connected, `affiliate` holds the code and link), `verificationRequired` (a 6-digit code was emailed) or `error`.
+4. `verifyAffiliateCode(email, code, name?, options?)` for the code step. Call `createAffiliateForUser` again to send a new code.
+5. `getMyAffiliateDetails()` for the code, link, `referralCount`, `totalEarned`, `currency`, `rewardsGranted`, `premiumUntil`, `rewardCodes` (each with `code`, `store` and `redeemUrl`) and `dashboardUrl`.
+6. `setReferrerAccount({ appUserId, playPurchaseToken })` when the user subscribes or logs in after joining.
+7. `shareReferralLink(message?)` from a click handler, or build your own text from `details.affiliateShortCode` and `details.deeplinkurl`.
+8. `signOutAffiliate()` on logout.
+
+States to handle:
+
+| State | How you know | What to show |
+|-------|--------------|--------------|
+| Program off | `config.enabled === false` | Hide the entry point |
+| Not enrolled | `isUserAnAffiliate()` is false | Your email and name form |
+| Code needed | `status === 'verificationRequired'` | A 6-digit code field, with resend and "use a different email" |
+| Enrolled | `getMyAffiliateDetails()` returns details | The code and link with copy and share, plus the stats |
+| Rewards | `premiumUntil` in the future, or `rewardCodes` is not empty | The premium line, and each code with a link to `redeemUrl` |
+| Errors | `result.status === 'error'`, then `result.errorCode` | Your own wording per code |
+| Disconnected | `getMyAffiliateDetails()` returns `null` while `isUserAnAffiliate()` is false | Back to the join form |
+
+`getMyAffiliateDetails()` returns `null` both when the browser is not connected and when the request failed. Check `isUserAnAffiliate()` afterwards to tell them apart: still `true` means the request failed and is worth retrying.
+
+```javascript
+// 1. Make the user a referrer
+const result = await InsertAffiliate.createAffiliateForUser('jane@example.com', 'Jane');
+
+if (result.status === 'verificationRequired') {
+  // The email is already an affiliate: we emailed a 6-digit code
+  const code = prompt('Enter the code we emailed you');
+  const verified = await InsertAffiliate.verifyAffiliateCode('jane@example.com', code);
+  if (verified.status === 'error') alert(verified.errorMessage);
+} else if (result.status === 'error') {
+  console.log(result.errorCode, result.errorMessage); // e.g. PROGRAM_DISABLED
+}
+
+// 2. Read their stats, and load the program config (the app name used in the share text)
+const [details] = await Promise.all([
+  InsertAffiliate.getMyAffiliateDetails(),
+  InsertAffiliate.getReferralProgramConfig(),
+]);
+if (details) {
+  console.log(details.affiliateShortCode, details.deeplinkurl);
+  console.log(`${details.referralCount} referrals, ${details.totalEarned} ${details.currency} earned`);
+  console.log(`${details.rewardsGranted} rewards, premium until ${details.premiumUntil}`);
+  details.rewardCodes.forEach((reward) => console.log(reward.code, reward.redeemUrl));
+}
+
+// 3. Share (call from a click handler, after step 2 has loaded the details)
+await InsertAffiliate.shareReferralLink(); // 'shared' | 'copied' | 'cancelled' | 'failed'
+
+// On logout
+await InsertAffiliate.signOutAffiliate();
+```
+
+- `createAffiliateForUser` creates a new affiliate and connects this browser straight away. If the email is already an affiliate it never connects on the email alone: it emails a 6-digit code and returns `verificationRequired`.
+- Connecting stores a private token in `localStorage`, one per company. `isUserAnAffiliate()` checks for it without a network call. `signOutAffiliate()` removes it; the affiliate account is kept.
+- If the token stops working (for example the affiliate was removed), `getMyAffiliateDetails()` clears it and returns `null`.
+- `referralCount` is the count for the trigger you chose in the dashboard (install, event or purchase). It only ever goes up.
+- Sharing uses the browser share sheet (`navigator.share`), or copies the text to the clipboard where that is not available. Browsers only allow either shortly after the tap, so `shareReferralLink()` never waits on the network: it uses the details and config already loaded by `getMyAffiliateDetails()` and `getReferralProgramConfig()`, and returns `'failed'` if the details are not loaded yet. Default text: `Try {companyName}: {link}`, or `Use my code {code} in {companyName}` when you use Short Code Only.
+- Error codes: `INVALID_EMAIL`, `INVALID_CODE`, `PROGRAM_DISABLED`, `AFFILIATE_LIMIT_REACHED`, `TOO_MANY_CODES`, `RATE_LIMITED`, `COMPANY_NOT_FOUND`, `NETWORK_ERROR`, `NOT_INITIALIZED`.
+
+**Automatic referrer rewards:** when you set up referrer rewards in the dashboard (RevenueCat, Adapty, App Store offer codes or Google Play), pass the user's own accounts so the reward can be granted to them:
+
+```javascript
+// When they join
+await InsertAffiliate.createAffiliateForUser('jane@example.com', 'Jane', {
+  appUserId: 'RevenueCat or Adapty app user id',
+  playPurchaseToken: 'their own Google Play purchase token', // Android apps only
+});
+// verifyAffiliateCode(email, code, name, options) takes the same options
+
+// Or later, if they subscribe or log in after joining
+const saved = await InsertAffiliate.setReferrerAccount({ appUserId: 'rc_user_123' });
+```
+
+- `setReferrerAccount` needs a connected referrer on this browser and returns `false` otherwise. Any rewards that were waiting for these accounts are granted once they are saved.
+- The SDK also sends this browser's device id (the same one in `returnInsertAffiliateIdentifier()`), so a referrer who uses their own link is not counted as their own referral.
+- `rewardCodes` are App Store offer codes or Google Play promo codes, newest first, each with a `redeemUrl` and a `store` (`app_store` or `google_play`). `premiumUntil` is an ISO date or `null`.
+
+**Rewarding referrers yourself:** values read on the device are for display. A modified browser can show anything, so grant anything valuable (credits, premium time) from your server using the `referral.created` webhook or the Public API. The webhook includes a running `referral_count`, so rewarding up to that number is safe to repeat.
+
+**Store rules:** the SDK only uses the share sheet and never asks for contacts. Never lock features behind sharing, and never reward ratings or reviews.
+
+</details>
+
 ### Prevent Affiliate Transfer
 
 By default, clicking a new affiliate link will overwrite any existing attribution. Enable `preventAffiliateTransfer` to lock the first affiliate:
@@ -503,6 +664,20 @@ Learn more: [Prevent Affiliate Transfer Documentation](https://docs.insertaffili
 | `getAffiliateStoredDate()` | Get ISO date string when affiliate was stored | `Promise<string \| null>` |
 | `isAffiliateAttributionValid()` | Check if attribution is still valid | `Promise<boolean>` |
 | `setInsertAffiliateIdentifierChangeCallback(fn)` | Set change callback | `void` |
+
+### In-App Referral Methods
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `createAffiliateForUser(email, name, options?)` | Make the app user a referrer, or email a code if they already are one | `Promise<AffiliateEnrolmentResult>` |
+| `verifyAffiliateCode(email, code, name?, options?)` | Finish connecting with the emailed 6-digit code | `Promise<AffiliateEnrolmentResult>` |
+| `setReferrerAccount(options)` | Save the referrer's app user id or Play purchase token after joining | `Promise<boolean>` |
+| `getMyAffiliateDetails()` | Connected referrer's details and stats | `Promise<MyAffiliateDetails \| null>` |
+| `isUserAnAffiliate()` | Whether a referrer is connected on this device (no network) | `Promise<boolean>` |
+| `signOutAffiliate()` | Disconnect the referrer from this device | `Promise<void>` |
+| `getReferralProgramConfig()` | Program on/off plus dashboard copy and colour | `Promise<ReferralProgramConfig \| null>` |
+| `shareReferralLink(message?)` | Share sheet, or copy to clipboard | `Promise<ReferralShareOutcome>` |
+| `showReferAFriend(options?)` | Show the drop-in modal | `ReferAFriendHandle` |
 
 <details>
 <summary><strong>Detailed Method Documentation</strong></summary>

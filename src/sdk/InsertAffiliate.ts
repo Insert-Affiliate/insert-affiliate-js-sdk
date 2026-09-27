@@ -1,6 +1,27 @@
 // src/sdk/InsertAffiliate.ts
 import { getValue, saveValue } from '../utils/asyncStorage';
 import { generateShortDeviceID, generateUUID } from '../utils/helpers';
+import {
+  buildReferralShareText,
+  fetchMyAffiliateDetails,
+  fetchReferralProgramConfig,
+  MyDetailsFetch,
+  normalizeVerificationCode,
+  postEnrolment,
+  postReferrerIdentity,
+  shareText,
+} from '../referrals/referralApi';
+import { clearReferrerToken, readReferrerToken } from '../referrals/referrerTokenStore';
+import { presentReferAFriend } from '../referrals/referAFriendModal';
+import type {
+  AffiliateEnrolmentResult,
+  MyAffiliateDetails,
+  ReferAFriendHandle,
+  ReferAFriendOptions,
+  ReferralProgramConfig,
+  ReferralShareOutcome,
+  ReferrerAccountOptions,
+} from '../referrals/referralTypes';
 
 interface IapticAndroidReceipt {
   orderId: string;
@@ -44,6 +65,11 @@ export class InsertAffiliate {
   private static affiliateAttributionActiveTime: number | null = null; // in milliseconds
   private static preventAffiliateTransfer: boolean = false;
   private static offerCode: string | null = null;
+  // Last referral details and config seen. shareReferralLink uses only these,
+  // so the share sheet opens without a network round trip (browsers require
+  // the share to follow the user's tap closely).
+  private static lastReferralDetails: MyAffiliateDetails | null = null;
+  private static lastReferralConfig: ReferralProgramConfig | null = null;
 
   private static verboseLog(message: string): void {
     if (this.verboseLogging) {
@@ -802,6 +828,243 @@ export class InsertAffiliate {
     } catch (err) {
       this.verboseLog(`Error fetching/opening offer code: ${err}`);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // In-app referrals: make the app's own user an affiliate and read their stats
+  // ---------------------------------------------------------------------------
+
+  private static async referralCompanyId(): Promise<string | null> {
+    try {
+      return this.companyCode || await getValue('companyCode');
+    } catch {
+      return this.companyCode;
+    }
+  }
+
+  /**
+   * The device id in this browser's "{shortCode}-{deviceId}" identifier, so the
+   * server can tell a referrer apart from the friends they refer.
+   * Null when storage is unavailable.
+   */
+  private static async referralDeviceId(): Promise<string | null> {
+    try {
+      return await this.getOrCreateUserID();
+    } catch {
+      return null;
+    }
+  }
+
+  private static notInitializedResult(): AffiliateEnrolmentResult {
+    this.verboseLog('Cannot use referrals: no company code available. Call initialize first.');
+    return {
+      status: 'error',
+      errorCode: 'NOT_INITIALIZED',
+      errorMessage: 'The Insert Affiliate SDK is not initialized with a company code.',
+    };
+  }
+
+  /**
+   * Makes the app's user an affiliate (a referrer) of this company.
+   * A new email is created straight away and this device is connected.
+   * An email that is already an affiliate is sent a 6-digit code instead:
+   * the result is `verificationRequired`; finish with verifyAffiliateCode.
+   * @param email The user's email (usually the app's logged-in user)
+   * @param name The user's display name
+   * @param options The user's own accounts (RevenueCat / Adapty app user id,
+   *   Google Play purchase token), used to grant their referral rewards
+   */
+  static async createAffiliateForUser(
+    email: string,
+    name: string,
+    options?: ReferrerAccountOptions
+  ): Promise<AffiliateEnrolmentResult> {
+    this.verboseLog('Creating affiliate for app user...');
+    const companyId = await this.referralCompanyId();
+    if (!companyId) return this.notInitializedResult();
+
+    const result = await postEnrolment('enrol', companyId, {
+      email: (email || '').trim(),
+      name: (name || '').trim(),
+      ...await this.referrerAccountFields(options),
+    }, (message) => this.verboseLog(message));
+    if (result.status !== 'error') this.lastReferralDetails = null;
+    return result;
+  }
+
+  /**
+   * Finishes connecting this device with the 6-digit code emailed by
+   * createAffiliateForUser. On success the device is connected.
+   * @param email The same email passed to createAffiliateForUser
+   * @param code The 6-digit code from the email
+   * @param name Optional display name, used if the affiliate is created now
+   * @param options The user's own accounts, as for createAffiliateForUser
+   */
+  static async verifyAffiliateCode(
+    email: string,
+    code: string,
+    name?: string,
+    options?: ReferrerAccountOptions
+  ): Promise<AffiliateEnrolmentResult> {
+    this.verboseLog('Verifying affiliate code...');
+    const companyId = await this.referralCompanyId();
+    if (!companyId) return this.notInitializedResult();
+
+    const result = await postEnrolment('verify', companyId, {
+      email: (email || '').trim(),
+      code: normalizeVerificationCode(code),
+      name: (name || '').trim(),
+      ...await this.referrerAccountFields(options),
+    }, (message) => this.verboseLog(message));
+    if (result.status !== 'error') this.lastReferralDetails = null;
+    return result;
+  }
+
+  private static async referrerAccountFields(options?: ReferrerAccountOptions): Promise<Record<string, string | undefined>> {
+    return {
+      deviceId: (await this.referralDeviceId()) || undefined,
+      appUserId: options && options.appUserId,
+      playPurchaseToken: options && options.playPurchaseToken,
+    };
+  }
+
+  /**
+   * Saves the connected referrer's own accounts, for apps whose user
+   * subscribes or logs in after joining. The server then grants any
+   * rewards that were waiting for them.
+   * @param options The RevenueCat / Adapty app user id and/or the Google Play purchase token
+   * @returns True when saved; false when no referrer is connected on this device
+   *   or the request failed. A revoked connection is cleared.
+   */
+  static async setReferrerAccount(options: ReferrerAccountOptions): Promise<boolean> {
+    this.verboseLog('Saving referrer account...');
+    const companyId = await this.referralCompanyId();
+    const token = companyId ? readReferrerToken(companyId) : null;
+    if (!companyId || !token) {
+      this.verboseLog('Cannot save referrer account: no referrer connected on this device');
+      return false;
+    }
+    const saved = await postReferrerIdentity(
+      companyId,
+      token,
+      await this.referrerAccountFields(options),
+      (message) => this.verboseLog(message)
+    );
+    if (!readReferrerToken(companyId)) this.lastReferralDetails = null;
+    this.verboseLog(`Referrer account saved: ${saved}`);
+    return saved;
+  }
+
+  private static async loadMyAffiliateDetails(): Promise<MyDetailsFetch> {
+    const companyId = await this.referralCompanyId();
+    const token = companyId ? readReferrerToken(companyId) : null;
+    if (!companyId || !token) {
+      this.verboseLog('No referrer connected on this device');
+      this.lastReferralDetails = null;
+      return { kind: 'signedOut' };
+    }
+    const loaded = await fetchMyAffiliateDetails(companyId, token, (message) => this.verboseLog(message));
+    if (loaded.kind === 'ok') this.lastReferralDetails = loaded.details;
+    if (loaded.kind === 'signedOut') this.lastReferralDetails = null;
+    return loaded;
+  }
+
+  /**
+   * The connected user's affiliate details and referral stats.
+   * Values are for display: grant anything valuable from your server.
+   * @returns The details, or null when this device has no referrer connected
+   *   (or the request failed). A revoked connection is cleared.
+   */
+  static async getMyAffiliateDetails(): Promise<MyAffiliateDetails | null> {
+    this.verboseLog('Getting my affiliate details...');
+    const loaded = await this.loadMyAffiliateDetails();
+    return loaded.kind === 'ok' ? loaded.details : null;
+  }
+
+  /**
+   * Whether this device has a referrer connected for this company.
+   * Local check only, no network.
+   */
+  static async isUserAnAffiliate(): Promise<boolean> {
+    const companyId = await this.referralCompanyId();
+    return !!companyId && !!readReferrerToken(companyId);
+  }
+
+  /** Disconnects the referrer from this device (call on app logout). The affiliate account is kept. */
+  static async signOutAffiliate(): Promise<void> {
+    this.verboseLog('Signing out referrer on this device');
+    const companyId = await this.referralCompanyId();
+    if (companyId) clearReferrerToken(companyId);
+    this.lastReferralDetails = null;
+  }
+
+  /** The company's in-app referral settings (program on/off, copy, colour), or null if unavailable. */
+  static async getReferralProgramConfig(): Promise<ReferralProgramConfig | null> {
+    this.verboseLog('Getting referral program config...');
+    const companyId = await this.referralCompanyId();
+    if (!companyId) {
+      this.verboseLog('Cannot get referral config: no company code available');
+      return null;
+    }
+    const config = await fetchReferralProgramConfig(companyId, (message) => this.verboseLog(message));
+    if (config) this.lastReferralConfig = config;
+    return config;
+  }
+
+  /**
+   * Shares the connected user's referral link with the system share sheet,
+   * or copies it to the clipboard where sharing is unavailable.
+   * Call from a click handler. Browsers only allow sharing and copying
+   * shortly after the tap, so this never waits on the network: it uses the
+   * details from the last getMyAffiliateDetails call and the app name from
+   * the last getReferralProgramConfig call. Load both before the user taps.
+   * Without loaded details it returns 'failed' and starts loading them, so a
+   * later tap can share.
+   * @param message Optional message. May use {link} and {code} placeholders.
+   */
+  static async shareReferralLink(message?: string): Promise<ReferralShareOutcome> {
+    this.verboseLog('Sharing referral link...');
+    const details = this.lastReferralDetails;
+    const config = this.lastReferralConfig;
+    if (!config) void this.getReferralProgramConfig();
+    if (!details) {
+      this.verboseLog('Cannot share: referrer details not loaded. Call getMyAffiliateDetails before the tap');
+      void this.getMyAffiliateDetails();
+      return 'failed';
+    }
+    const text = buildReferralShareText(details, config ? config.companyName : '', message);
+    const outcome = await shareText(text);
+    this.verboseLog(`Share outcome: ${outcome}`);
+    return outcome;
+  }
+
+
+  /**
+   * Presents the drop-in "Refer a friend" modal. Handles enrolment, the
+   * email code step, sharing and stats. Browser only. Only one modal is
+   * shown at a time: calling this while it is open focuses the open one.
+   * @returns A handle whose close() dismisses the modal
+   */
+  static showReferAFriend(options: ReferAFriendOptions = {}): ReferAFriendHandle {
+    if (typeof document === 'undefined' || !document.body) {
+      console.error('[Insert Affiliate] showReferAFriend needs a browser document.');
+      return { close: () => undefined };
+    }
+    if (!this.companyCode) {
+      this.verboseLog('showReferAFriend called before initialize; using the stored company code if any');
+    }
+    const account: ReferrerAccountOptions = {
+      appUserId: options.appUserId,
+      playPurchaseToken: options.playPurchaseToken,
+    };
+    return presentReferAFriend(options, {
+      hasToken: () => this.isUserAnAffiliate(),
+      loadConfig: () => this.getReferralProgramConfig(),
+      loadDetails: () => this.loadMyAffiliateDetails(),
+      enrol: (email, name) => this.createAffiliateForUser(email, name, account),
+      verify: (email, code, name) => this.verifyAffiliateCode(email, code, name, account),
+      saveAccount: () => this.setReferrerAccount(account),
+    });
   }
 
   private static async getOrCreateUserID(): Promise<string> {
