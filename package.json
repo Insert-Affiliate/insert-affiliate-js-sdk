@@ -1,6 +1,6 @@
 {
   "name": "insert-affiliate-js-sdk",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,8 +12,8 @@
   },
   "scripts": {
     "build": "tsup",
-  "dev": "tsup --watch",
-  "prepare": "npm run build"
+    "dev": "tsup --watch",
+    "prepare": "npm run build"
   },
   "keywords": [],
   "author": "",
