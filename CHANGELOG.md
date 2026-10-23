@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1]
+
+### Changed
+- npm metadata: real package description (was README badge markdown), homepage set to https://insertaffiliate.com, issues link added.
+
 ### Added
 - **In-app referrals** - Turn app users into affiliates and show them a "Refer a friend" screen
   - `createAffiliateForUser()`, `verifyAffiliateCode()`, `getMyAffiliateDetails()`, `isUserAnAffiliate()`, `signOutAffiliate()`, `getReferralProgramConfig()`, `shareReferralLink()`
