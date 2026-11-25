@@ -377,7 +377,7 @@ console.log('Detected affiliate:', affiliateId); // Should output: TEST123
 ## 🔧 Advanced Features
 
 <details>
-<summary><h3>Event Tracking (Beta)</h3></summary>
+<summary><h3>Event Tracking</h3></summary>
 
 Track custom events beyond purchases to incentivize affiliates for specific actions.
 
