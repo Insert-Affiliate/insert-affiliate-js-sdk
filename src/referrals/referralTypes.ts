@@ -13,6 +13,14 @@ export interface ReferrerAffiliate {
   deeplinkurl: string;
 }
 
+/** Which earnings the portal shows the referrer. */
+export interface ReferralEarnedDisplay {
+  /** Show the cash amount earned. */
+  cash: boolean;
+  /** Show the free-premium days earned. */
+  days: boolean;
+}
+
 /** The referrer's affiliate record plus referral stats. Values are for display only. */
 export interface MyAffiliateDetails extends ReferrerAffiliate {
   referralTrigger: ReferralTrigger;
@@ -30,6 +38,10 @@ export interface MyAffiliateDetails extends ReferrerAffiliate {
   rewardsGranted: number;
   /** ISO date the user's free premium from referrals runs until, or null. */
   premiumUntil: string | null;
+  /** Total free-premium days granted automatically. 0 from older servers. */
+  rewardDaysEarned: number;
+  /** Which earnings to show. Older servers don't send it; those show cash only. */
+  earnedDisplay: ReferralEarnedDisplay;
   /** App Store offer codes or Google Play promo codes granted as rewards, newest first. */
   rewardCodes: ReferralRewardCode[];
 }
@@ -65,6 +77,11 @@ export interface ReferralProgramConfig {
   rewardText: string;
   /** `#RRGGBB`, or empty when the company has not set one. */
   primaryColor: string;
+  /**
+   * Whether to show the short code. True when an older server doesn't send it.
+   * Apps building their own UI should still show it when `deeplinkurl` is not an http link.
+   */
+  showCode: boolean;
 }
 
 export type AffiliateEnrolmentStatus = 'created' | 'connected' | 'verificationRequired' | 'error';
@@ -100,8 +117,8 @@ export type ReferralShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed';
 /**
  * Every label the "Refer a friend" modal shows, so an app can translate or
  * reword it. Pass only the keys you want to change: the rest keep the English
- * defaults, and a blank value keeps the default too. Keep the `{email}` and
- * `{date}` placeholders in the strings that have them.
+ * defaults, and a blank value keeps the default too. Keep the `{email}`,
+ * `{date}` and `{count}` placeholders in the strings that have them.
  */
 export interface ReferralStrings {
   /** "Email" */
@@ -146,6 +163,12 @@ export interface ReferralStrings {
   referralsLabel: string;
   /** "Earned" */
   earnedLabel: string;
+  /** "Days earned" */
+  daysEarnedLabel: string;
+  /** "{count} day", for a count of 1 */
+  dayUnitOne: string;
+  /** "{count} days", for any other count */
+  dayUnitOther: string;
   /** "Free premium until {date}" */
   premiumUntil: string;
   /** "Your rewards" */

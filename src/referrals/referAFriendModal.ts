@@ -53,7 +53,7 @@ const STYLE = `
 .ia-raf-url{flex:1;min-width:0;font-size:13px;color:#444;word-break:break-all}
 .ia-raf-copy{flex:none;margin:0;padding:6px 10px;border:1px solid var(--ia-raf-primary);border-radius:calc(var(--ia-raf-radius) * .5);background:transparent;color:var(--ia-raf-primary);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .ia-raf-stats{display:flex;gap:12px;margin:16px 0 8px}
-.ia-raf-stat{flex:1;padding:12px;border-radius:calc(var(--ia-raf-radius) * .66);background:#f4f4f7;text-align:center}
+.ia-raf-stat{flex:1;min-width:0;padding:12px;border-radius:calc(var(--ia-raf-radius) * .66);background:#f4f4f7;text-align:center}
 .ia-raf-stat-value{display:block;font-size:20px;font-weight:700}
 .ia-raf-stat-label{display:block;color:#666;font-size:12px}
 .ia-raf-premium{margin:8px 0;padding:10px 12px;border-radius:calc(var(--ia-raf-radius) * .66);background:#eef7ef;color:#1b5e20;font-size:14px;font-weight:600;text-align:center}
@@ -102,6 +102,11 @@ function formatMoney(amount: number, currency: string): string {
   }
 }
 
+/** "1 day", "90 days": the count in the app's own day strings. */
+export function formatDays(count: number, text: Pick<ReferralStrings, 'dayUnitOne' | 'dayUnitOther'>): string {
+  return fillPlaceholders(count === 1 ? text.dayUnitOne : text.dayUnitOther, { count: String(count) });
+}
+
 const isHttpsUrl = (value: string): boolean => /^https:\/\//i.test(value);
 
 /** The localised date when `iso` is in the future, otherwise null. */
@@ -132,6 +137,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
   let email = (options.email || '').trim();
   let name = (options.name || '').trim();
   let companyName = '';
+  let showCode = true;
   let busy = false;
   let accountSaved = false;
   const text = resolveReferralStrings(options.strings);
@@ -412,7 +418,8 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     };
 
     const children: Child[] = [];
-    if (affiliate.affiliateShortCode) {
+    // With no web link the code is all there is to share, so it shows even when hidden.
+    if ((showCode || !hasLink) && affiliate.affiliateShortCode) {
       children.push(el('div', { className: 'ia-raf-row' }, [
         el('span', { className: 'ia-raf-code', text: affiliate.affiliateShortCode }),
         copyButton(text.copyCodeButton, affiliate.affiliateShortCode),
@@ -437,15 +444,15 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
     }
 
     if (stats) {
+      const stat = (value: string, label: string): HTMLElement =>
+        el('div', { className: 'ia-raf-stat' }, [
+          el('span', { className: 'ia-raf-stat-value', text: value }),
+          el('span', { className: 'ia-raf-stat-label', text: label }),
+        ]);
       children.push(el('div', { className: 'ia-raf-stats' }, [
-        el('div', { className: 'ia-raf-stat' }, [
-          el('span', { className: 'ia-raf-stat-value', text: String(stats.referralCount) }),
-          el('span', { className: 'ia-raf-stat-label', text: text.referralsLabel }),
-        ]),
-        el('div', { className: 'ia-raf-stat' }, [
-          el('span', { className: 'ia-raf-stat-value', text: formatMoney(stats.totalEarned, stats.currency) }),
-          el('span', { className: 'ia-raf-stat-label', text: text.earnedLabel }),
-        ]),
+        stat(String(stats.referralCount), text.referralsLabel),
+        stats.earnedDisplay.cash && stat(formatMoney(stats.totalEarned, stats.currency), text.earnedLabel),
+        stats.earnedDisplay.days && stat(formatDays(stats.rewardDaysEarned, text), text.daysEarnedLabel),
       ]));
       const premiumUntil = futureDateLabel(stats.premiumUntil);
       if (premiumUntil) {
@@ -497,6 +504,7 @@ export function presentReferAFriend(options: ReferAFriendOptions, deps: ReferAFr
 
     if (config) {
       companyName = config.companyName;
+      showCode = config.showCode;
       if (!options.primaryColor && config.primaryColor) setColor(config.primaryColor);
       if (!options.headline && config.headline) title.textContent = config.headline;
       if (!options.rewardText && config.rewardText) {

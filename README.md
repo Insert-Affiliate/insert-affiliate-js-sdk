@@ -485,7 +485,7 @@ document.getElementById('refer-button').addEventListener('click', () => {
 });
 ```
 
-The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code and link with Copy buttons, a Share button, stats (referrals and amount earned), a "Free premium until {date}" line while a premium reward is active, a "Your rewards" list of App Store offer codes or Google Play promo codes with a Redeem button each (opens the store's redemption page in a new tab) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards. Only one modal is shown at a time: calling `showReferAFriend` again while it is open focuses the open one.
+The modal handles everything: the "Get my link" form, the 6-digit email code step for existing affiliates, the code (unless the dashboard hides it and there is a link to share instead) and link with Copy buttons, a Share button, stats (referrals, then the amount earned and the free-premium days earned when the dashboard turns them on), a "Free premium until {date}" line while a premium reward is active, a "Your rewards" list of App Store offer codes or Google Play promo codes with a Redeem button each (opens the store's redemption page in a new tab) and an "Open my dashboard" button. It injects its own scoped styles, needs no framework, closes on Escape or a backdrop click, keeps keyboard focus inside while open, and returns focus afterwards. Only one modal is shown at a time: calling `showReferAFriend` again while it is open focuses the open one.
 
 | Option | Description |
 |--------|-------------|
@@ -515,19 +515,22 @@ InsertAffiliate.showReferAFriend({
     shareButton: 'Partager',
     referralsLabel: 'Parrainages',
     earnedLabel: 'Gagne',
+    daysEarnedLabel: 'Jours gagnes',
+    dayUnitOne: '{count} jour',
+    dayUnitOther: '{count} jours',
     premiumUntil: 'Premium gratuit jusqu\'au {date}',
     errorNetwork: 'Connexion impossible. Verifiez votre connexion.',
   },
 });
 ```
 
-Keep the `{email}` placeholder in `codeSentNotice` and `{date}` in `premiumUntil`; they are filled in for you.
+Keep the `{email}` placeholder in `codeSentNotice`, `{date}` in `premiumUntil` and `{count}` in `dayUnitOne` and `dayUnitOther`; they are filled in for you.
 
 | Group | Keys |
 |-------|------|
 | Joining | `emailLabel`, `nameLabel`, `joinButton`, `joiningButton` |
 | Email code step | `codeLabel`, `codeSentNotice` (`{email}`), `verifyButton`, `verifyingButton`, `resendButton`, `sendingNotice`, `codeResentNotice`, `differentEmailButton`, `errorCodeLength` |
-| Joined | `copyCodeButton`, `copyLinkButton`, `copiedNotice`, `copyFailedNotice`, `shareButton`, `shareFailedNotice`, `referralsLabel`, `earnedLabel`, `premiumUntil` (`{date}`), `rewardsHeading`, `redeemButton`, `dashboardLink` |
+| Joined | `copyCodeButton`, `copyLinkButton`, `copiedNotice`, `copyFailedNotice`, `shareButton`, `shareFailedNotice`, `referralsLabel`, `earnedLabel`, `daysEarnedLabel`, `dayUnitOne` and `dayUnitOther` (`{count}`), `premiumUntil` (`{date}`), `rewardsHeading`, `redeemButton`, `dashboardLink` |
 | Frame and states | `closeButton`, `loading`, `tryAgainButton` |
 | Errors | `errorProgramDisabled`, `errorAffiliateLimitReached`, `errorInvalidCode`, `errorTooManyCodes`, `errorRateLimited`, `errorInvalidEmail`, `errorNetwork`, `errorServer` |
 
@@ -537,11 +540,11 @@ Keep the `{email}` placeholder in `codeSentNotice` and `{date}` in `premiumUntil
 
 You can skip the modal and use the methods directly. In the order an app calls them:
 
-1. `getReferralProgramConfig()` to check the program is on (`enabled`) and to read the dashboard copy, colour and `companyName`.
+1. `getReferralProgramConfig()` to check the program is on (`enabled`) and to read the dashboard copy, colour, `companyName` and `showCode` (whether to show the short code; show it anyway when the user has no web link to share).
 2. `isUserAnAffiliate()` to see whether this browser is already connected (no network call).
 3. `createAffiliateForUser(email, name, options?)` to join. `status` is `created` (connected, `affiliate` holds the code and link), `verificationRequired` (a 6-digit code was emailed) or `error`.
 4. `verifyAffiliateCode(email, code, name?, options?)` for the code step. Call `createAffiliateForUser` again to send a new code.
-5. `getMyAffiliateDetails()` for the code, link, `referralCount`, `totalEarned`, `currency`, `rewardsGranted`, `premiumUntil`, `rewardCodes` (each with `code`, `store` and `redeemUrl`) and `dashboardUrl`.
+5. `getMyAffiliateDetails()` for the code, link, `referralCount`, `totalEarned`, `currency`, `rewardDaysEarned`, `earnedDisplay` (`{ cash, days }`: which earnings to show), `rewardsGranted`, `premiumUntil`, `rewardCodes` (each with `code`, `store` and `redeemUrl`) and `dashboardUrl`.
 6. `setReferrerAccount({ appUserId, playPurchaseToken })` when the user subscribes or logs in after joining.
 7. `shareReferralLink(message?)` from a click handler, or build your own text from `details.affiliateShortCode` and `details.deeplinkurl`.
 8. `signOutAffiliate()` on logout.

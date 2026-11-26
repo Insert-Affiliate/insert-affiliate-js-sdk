@@ -4,6 +4,7 @@
 import type {
   AffiliateEnrolmentResult,
   MyAffiliateDetails,
+  ReferralEarnedDisplay,
   ReferralProgramConfig,
   ReferralRewardCode,
   ReferralShareOutcome,
@@ -56,6 +57,12 @@ const parseRewardCodes = (value: unknown): ReferralRewardCode[] =>
     }))
     .filter((item) => item.code);
 
+// Absent (older servers): cash only, as before.
+const parseEarnedDisplay = (value: unknown): ReferralEarnedDisplay => {
+  const data = isObject(value) ? value : {};
+  return { cash: data.cash !== false, days: data.days === true };
+};
+
 export const parseMyAffiliateDetails = (raw: unknown): MyAffiliateDetails => {
   const data = isObject(raw) ? raw : {};
   return {
@@ -72,6 +79,8 @@ export const parseMyAffiliateDetails = (raw: unknown): MyAffiliateDetails => {
     dashboardUrl: str(data.dashboardUrl),
     rewardsGranted: num(data.rewardsGranted),
     premiumUntil: str(data.premiumUntil) || null,
+    rewardDaysEarned: Math.max(0, Math.floor(num(data.rewardDaysEarned))),
+    earnedDisplay: parseEarnedDisplay(data.earnedDisplay),
     rewardCodes: parseRewardCodes(data.rewardCodes),
   };
 };
@@ -86,6 +95,7 @@ export const parseReferralProgramConfig = (raw: unknown): ReferralProgramConfig 
     headline: str(data.headline),
     rewardText: str(data.rewardText),
     primaryColor: /^#[0-9a-fA-F]{6}$/.test(color) ? color : '',
+    showCode: data.showCode !== false,
   };
 };
 

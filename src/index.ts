@@ -5,6 +5,7 @@ export type {
   MyAffiliateDetails,
   ReferAFriendHandle,
   ReferAFriendOptions,
+  ReferralEarnedDisplay,
   ReferralErrorCode,
   ReferralProgramConfig,
   ReferralRewardCode,
