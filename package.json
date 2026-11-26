@@ -1,6 +1,6 @@
 {
   "name": "insert-affiliate-js-sdk",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Official JavaScript SDK for Insert Affiliate: track affiliate-driven purchases in web and Capacitor apps.",
   "homepage": "https://insertaffiliate.com",
   "main": "dist/index.js",

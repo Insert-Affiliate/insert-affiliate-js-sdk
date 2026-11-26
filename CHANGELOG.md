@@ -5,7 +5,14 @@ All notable changes to the Insert Affiliate JavaScript SDK will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0]
+
+### Added
+- **Refer a friend modal** - Follows the dashboard's display settings
+  - `ReferralProgramConfig.showCode`: when false the modal hides the short code box (the link keeps its Copy button), unless there is no web link to share, when the code still shows. Defaults to true for older servers
+  - `MyAffiliateDetails.rewardDaysEarned` and `earnedDisplay` (`{ cash, days }`): the stats strip shows Referrals, then Earned only when `cash`, then a new "Days earned" stat only when `days`. Older servers show Referrals and Earned only
+  - New `ReferralStrings` keys: `daysEarnedLabel`, `dayUnitOne` and `dayUnitOther` (both use `{count}`)
+  - Exported type: `ReferralEarnedDisplay`
 
 ## [1.5.1]
 
